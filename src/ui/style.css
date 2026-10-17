@@ -32,3 +32,34 @@ canvas { display: block; position: fixed; inset: 0; width: 100vw !important; hei
 #start p { color: #dde; margin: 4px; }
 #start .go { margin-top: 24px; padding: 10px 26px; border: 1px solid #fff; border-radius: 99px; letter-spacing: .3em; }
 #start.hidden { display: none; }
+
+/* ---------- in-game HUD ---------- */
+#ghud { position: fixed; inset: 0; pointer-events: none; font-variant-numeric: tabular-nums; text-shadow: 0 1px 8px #0006; }
+#ghud .score { position: absolute; left: 24px; top: 18px; display: flex; align-items: baseline; gap: 12px; }
+#ghud .score .val { font-size: 30px; font-weight: 600; letter-spacing: .06em; }
+#ghud .score .mult { font-size: 22px; font-weight: 800; color: #ffe066; }
+#ghud .score .mult.bump { animation: bump .35s ease-out; }
+@keyframes bump { 0% { transform: scale(1.8); } 100% { transform: scale(1); } }
+#ghud .combo { position: absolute; left: 26px; top: 60px; font-size: 12px; letter-spacing: .25em; color: #ffe066; }
+#ghud .flux { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); width: min(320px, 60vw); height: 8px;
+  border-radius: 4px; background: #0006; }
+#ghud .flux i { display: block; height: 100%; width: 0; border-radius: 4px; background: #bff6ff; box-shadow: 0 0 12px #bff6ff;
+  transition: width .12s linear; }
+#ghud .flux span { position: absolute; left: 50%; top: -18px; transform: translateX(-50%); font-size: 10px; letter-spacing: .4em; opacity: .8; }
+#ghud .shields { position: absolute; right: 26px; bottom: 22px; display: flex; gap: 10px; }
+#ghud .shields b { width: 14px; height: 14px; transform: rotate(45deg); border: 2px solid #bff6ff; background: #bff6ff55;
+  box-shadow: 0 0 10px #bff6ff88; transition: all .2s; }
+#ghud .shields b.off { background: transparent; border-color: #fff4; box-shadow: none; }
+#ghud .banner { position: absolute; left: 0; right: 0; top: 30%; text-align: center; font-size: clamp(18px, 3vw, 30px);
+  letter-spacing: .5em; font-weight: 300; opacity: 0; transition: opacity .3s; }
+#ghud .banner.on { opacity: 1; }
+#ghud .banner.dead { font-weight: 700; letter-spacing: .6em; }
+#ghud .mode { position: absolute; right: 26px; top: 22px; font-size: 11px; letter-spacing: .3em; color: #ffe066; }
+#ghud .pop { position: absolute; transform: translate(-50%, 0); font-size: 13px; font-weight: 800; letter-spacing: .15em;
+  white-space: nowrap; animation: pop .8s ease-out forwards; }
+#ghud .pop.graze { color: #ffe066; }
+#ghud .pop.hit { color: #ff4d6d; font-size: 16px; }
+@keyframes pop { 0% { opacity: 0; transform: translate(-50%, 6px) scale(.8); } 15% { opacity: 1; transform: translate(-50%, 0) scale(1.1); }
+  100% { opacity: 0; transform: translate(-50%, -34px) scale(1); } }
+#ghud .pop.shard { color: #ffd84a; font-size: 12px; }
+#ghud .banner.hint { font-size: clamp(14px, 2vw, 20px); letter-spacing: .35em; font-weight: 500; top: 22%; }

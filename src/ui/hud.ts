@@ -25,13 +25,15 @@ export class Hud {
 
     this.hud = document.createElement('div');
     this.hud.id = 'hud';
+    this.hud.className = 'hidden';
     this.hud.dataset.backend = backend;
 
     this.start = document.createElement('div');
     this.start.id = 'start';
     this.start.innerHTML = `
       <h1>HYPER<b>LOOPS</b></h1>
-      <p>M0 look-dev · 10 scenes · 160 BPM</p>
+      <p>steer with mouse · WASD / arrows · gamepad · touch-drag</p>
+      <p>graze the crystal spikes · skim the ground · don't touch</p>
       <p style="color:#99a">renderer: ${backend}</p>
       <div class="go">CLICK TO FLY</div>`;
 
@@ -78,15 +80,16 @@ export class Hud {
     const ss = (info.time % 60).toFixed(1).padStart(4, '0');
     const beatInBar = ((info.beatIndex % 4) + 4) % 4;
     const barInScene = Math.floor(info.sceneTime / (60 / 160) / 4);
+    const barsInScene = Math.round(info.sceneLen / (60 / 160) / 4);
     let dots = '';
     for (let i = 0; i < 4; i++) dots += `<i class="${i === beatInBar ? 'on' : ''}"></i>`;
     this.hud.innerHTML = `
       <div class="scene">${sceneNo}/${total} · ${sceneName}</div>
       <div class="beats">${dots}</div>
       <div class="row"><span>time</span><span>${mm}:${ss}</span></div>
-      <div class="row"><span>bar in scene</span><span>${barInScene + 1}/8</span></div>
+      <div class="row"><span>bar in scene</span><span>${barInScene + 1}/${barsInScene}</span></div>
       <div class="row"><span>fps · ${this.hud.dataset.backend}</span><span>${this.fps}</span></div>
       <div class="row"><span>ref video</span><span>${this.refMode}</span></div>
-      <div class="keys">space pause · ←/→ scene · 1-9,0 jump · V ref video · H hud</div>`;
+      <div class="keys">esc pause · M mute · [ ] scene · 1-9,0 jump · I invincible · V ref video · H hud</div>`;
   }
 }

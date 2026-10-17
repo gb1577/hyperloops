@@ -1,7 +1,8 @@
 import * as THREE from 'three/webgpu';
 import { PRESETS } from '../scenes/presets';
 import type { ScenePreset } from '../scenes/types';
-import { SCENE_LEN, type BeatInfo } from '../core/beatclock';
+import type { BeatInfo } from '../core/beatclock';
+import { LOOP_LEN, SCENE_LENS } from '../core/timeline';
 import { fbm } from '../core/noise';
 import { TerrainLayer, tubeCenter } from './terrain';
 import { Sky } from './sky';
@@ -10,18 +11,29 @@ import { Post } from './post';
 
 /** Distance travelled at time t: speed changes per scene, but position stays a pure function of time (seek-safe). */
 export function zAt(t: number): number {
-  const loops = Math.floor(t / (SCENE_LEN * PRESETS.length));
-  const loopLen = PRESETS.reduce((s, p) => s + p.camera.speed * SCENE_LEN, 0);
-  let tt = t - loops * SCENE_LEN * PRESETS.length;
+  const loops = Math.floor(Math.max(0, t) / LOOP_LEN);
+  const loopLen = PRESETS.reduce((s, p, i) => s + p.camera.speed * SCENE_LENS[i], 0);
+  let tt = Math.max(0, t) - loops * LOOP_LEN;
   let z = loops * loopLen;
-  for (const p of PRESETS) {
-    const d = Math.min(tt, SCENE_LEN);
-    z += d * p.camera.speed;
+  for (let i = 0; i < PRESETS.length; i++) {
+    const d = Math.min(tt, SCENE_LENS[i]);
+    z += d * PRESETS[i].camera.speed;
     tt -= d;
     if (tt <= 0) break;
   }
   return -z;
 }
+
+/** how far ahead of the camera the glider flies */
+export const GLIDER_AHEAD = 9;
+
+/** player offset from the flight path, fed back so the camera can chase the glider */
+export interface Focus {
+  x: number;
+  y: number;
+  bank: number;
+}
+const NO_FOCUS: Focus = { x: 0, y: 0, bank: 0 };
 
 export class World {
   readonly scene = new THREE.Scene();
@@ -35,6 +47,7 @@ export class World {
   private readonly fogLinear = new THREE.Fog('#ffffff', 50, 200);
   private layers: TerrainLayer[] = [];
   private current = -1;
+  private punchFlash = 0;
   preset: ScenePreset = PRESETS[0];
 
   constructor(renderer: THREE.WebGPURenderer) {
@@ -53,6 +66,31 @@ export class World {
 
   get sceneIndex() {
     return this.current;
+  }
+
+  get terrain(): readonly TerrainLayer[] {
+    return this.layers;
+  }
+
+  /** Centre of the flight path at depth z, at the scene's flight height. */
+  pathPoint(z: number, out: THREE.Vector3): THREE.Vector3 {
+    const p = this.preset;
+    const first = p.layers[0];
+    const baseY = first?.kind === 'floor' ? first.base + p.camera.height : p.camera.height;
+    const c = first?.kind === 'tube' ? tubeCenter(first, z) : { x: 0, y: 0 };
+    return out.set(c.x, c.y + baseY, z);
+  }
+
+  /** a short white flash on top of the scene transitions (hit feedback) */
+  punch(amount: number) {
+    this.punchFlash = Math.max(this.punchFlash, amount);
+  }
+
+  /** Smallest free space to any terrain surface at a world point (Infinity when there is none). */
+  clearance(x: number, y: number, z: number): number {
+    let m = Infinity;
+    for (const l of this.layers) m = Math.min(m, l.clearance(x, y, z));
+    return m;
   }
 
   setScene(i: number) {
@@ -88,27 +126,34 @@ export class World {
     this.camera.updateProjectionMatrix();
   }
 
-  update(info: BeatInfo, bass: number) {
+  private readonly tmpA = new THREE.Vector3();
+  private readonly tmpB = new THREE.Vector3();
+
+  update(info: BeatInfo, bass: number, focus: Focus = NO_FOCUS) {
     const idx = info.sceneIndex % PRESETS.length;
     this.setScene(idx);
     const p = this.preset;
     const c = p.camera;
     const t = info.time;
 
-    // camera
+    // chase camera: sits behind and above the glider, looks down the path past it
     const z = zAt(t);
-    const swayX = (fbm(t * 0.12, 3.7, 3) - 0.5) * 2 * c.sway * 2;
-    const swayY = (fbm(t * 0.1, 9.1, 3) - 0.5) * 2 * c.sway * 0.6;
-    const baseY = p.layers[0]?.kind === 'floor' ? p.layers[0].base + c.height : c.height;
-    // follow a meandering cave and look down its path
+    const swayX = (fbm(t * 0.12, 3.7, 3) - 0.5) * 2 * c.sway * 0.8;
+    const swayY = (fbm(t * 0.1, 9.1, 3) - 0.5) * 2 * c.sway * 0.25;
     const lead = p.layers[0]?.kind === 'tube' ? p.layers[0] : undefined;
-    const c0 = lead ? tubeCenter(lead, z) : { x: 0, y: 0 };
-    const c1 = lead ? tubeCenter(lead, z - 40) : { x: 0, y: 0 };
-    this.camera.position.set(c0.x + swayX, c0.y + baseY + swayY, z);
+    const lift = lead ? 1.3 : 2.2;
+    const look = 16;
+    const pc = this.pathPoint(z, this.tmpA);
+    const pg = this.pathPoint(z - GLIDER_AHEAD - look, this.tmpB);
+    this.camera.position.set(pc.x + focus.x * 0.7 + swayX, pc.y + focus.y * 0.7 + lift + swayY, z);
+    this.camera.up.set(0, 1, 0);
+    this.camera.lookAt(
+      pg.x + focus.x * 0.85,
+      pg.y + focus.y * 0.85 + lift * 0.3 + Math.tan(c.pitch) * (GLIDER_AHEAD + look),
+      pg.z,
+    );
     const roll = c.roll + c.rollSwing * Math.sin((info.bar / c.rollPeriodBars) * Math.PI * 2);
-    const yaw = -swayX * 0.004 - Math.atan2(c1.x - c0.x, 40);
-    const pitch = c.pitch + Math.atan2(c1.y - c0.y, 40);
-    this.camera.rotation.set(pitch, yaw, roll, 'YXZ');
+    this.camera.rotateZ(roll + focus.bank * 0.35);
     this.camera.updateMatrixWorld();
 
     // in a meandering cave, keep the light at the far end of the tunnel
@@ -133,9 +178,10 @@ export class World {
     // transitions: white-out ramps into scenes that start with a flash, and a short punch after every cut
     const next = PRESETS[(idx + 1) % PRESETS.length];
     let flash = Math.exp(-info.sceneTime * 7) * (p.transition === 'flash' ? 1 : 0.35);
-    const toEnd = SCENE_LEN - info.sceneTime;
+    const toEnd = info.sceneLen - info.sceneTime;
     if (next.transition === 'flash' && toEnd < 1.5) flash = Math.max(flash, Math.pow(1 - toEnd / 1.5, 2));
-    this.post.flash.value = Math.min(1, flash);
+    this.punchFlash *= 0.85;
+    this.post.flash.value = Math.min(1, Math.max(flash, this.punchFlash));
 
     const fadeOut = p.fadeOut ?? 0;
     this.post.vignette.value = p.post.vignette + info.sceneProgress * 0.35 * fadeOut;

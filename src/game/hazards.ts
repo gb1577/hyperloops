@@ -1,0 +1,375 @@
+import * as THREE from 'three/webgpu';
+import { BEAT, BEAT_OFFSET } from '../core/beatclock';
+import { locate } from '../core/timeline';
+import { hash2, lerp } from '../core/noise';
+import { PRESETS } from '../scenes/presets';
+import type { ScenePreset } from '../scenes/types';
+import { GLIDER_AHEAD, World, zAt } from '../render/world';
+import type { TerrainLayer } from '../render/terrain';
+
+const MAX_SPIKES = 128;
+const MAX_SHARDS = 96;
+/** the ground ring glows this many beats before the spike erupts */
+const TELEGRAPH_BEATS = 1;
+/** spikes erupt this many beats before the glider reaches them */
+const ERUPT_LEAD = 2;
+const RISE_BEATS = 0.25;
+const SEED = 9137;
+
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+const beatTime = (b: number) => BEAT_OFFSET + b * BEAT;
+
+interface Spike {
+  passBeat: number;
+  base: THREE.Vector3;
+  dir: THREE.Vector3;
+  quat: THREE.Quaternion;
+  radius: number;
+  height: number;
+  /** current eruption 0..1 */
+  rise: number;
+  grazedAt: number;
+  hitAt: number;
+  color: THREE.Color;
+}
+
+interface Shard {
+  pos: THREE.Vector3;
+  takenAt: number;
+}
+
+export interface HazardContact {
+  hit: boolean;
+  /** spikes grazed for the first time this frame (graze points) */
+  grazes: THREE.Vector3[];
+  /** shards collected this frame */
+  shards: THREE.Vector3[];
+  /** 0..1 how close the glider is to the nearest spike surface (inside the graze zone) */
+  near: number;
+}
+
+/**
+ * Beat-scheduled crystal spikes and light shards, laid out in musical patterns:
+ *   scatter — loose spikes, some tall, some low enough to skim over
+ *   wall    — on the downbeat a row of tall spikes with one gap (in tunnels: half the tube blocked)
+ *   slalom  — one tall spike per beat, alternating sides
+ *   aimed   — tall spikes on beats 1 and 3 placed where the player is flying
+ * Placement depends only on the beat number (except "aimed"), so a song plays the same every time.
+ */
+export class Hazards {
+  readonly group = new THREE.Group();
+  private readonly spikeMesh: THREE.InstancedMesh;
+  private readonly ringMesh: THREE.InstancedMesh;
+  private readonly shardMesh: THREE.InstancedMesh;
+  private readonly spikeMat: THREE.MeshLambertNodeMaterial;
+  private spikes: Spike[] = [];
+  private shards: Shard[] = [];
+  private nextBeat = 0;
+  private scene = -1;
+  private readonly m = new THREE.Matrix4();
+  private readonly s = new THREE.Vector3();
+  private readonly q = new THREE.Quaternion();
+  private readonly c = new THREE.Color();
+  private readonly tmpPos = new THREE.Vector3();
+  private readonly tmpDir = new THREE.Vector3();
+  private readonly path = new THREE.Vector3();
+  private readonly player = new THREE.Vector2();
+
+  constructor() {
+    const cone = new THREE.ConeGeometry(1, 1, 5, 1).toNonIndexed();
+    cone.translate(0, 0.5, 0);
+    cone.computeVertexNormals();
+    this.spikeMat = new THREE.MeshLambertNodeMaterial({ flatShading: true, side: THREE.DoubleSide });
+    this.spikeMesh = instanced(cone, this.spikeMat, MAX_SPIKES);
+
+    const ring = new THREE.RingGeometry(0.75, 1, 24, 1);
+    ring.rotateX(-Math.PI / 2);
+    this.ringMesh = instanced(ring, additive(), MAX_SPIKES);
+
+    const shard = new THREE.OctahedronGeometry(0.55, 0);
+    shard.scale(0.75, 1.3, 0.75);
+    this.shardMesh = instanced(shard, additive(), MAX_SHARDS);
+
+    this.group.add(this.spikeMesh, this.ringMesh, this.shardMesh);
+  }
+
+  /** forget everything and start scheduling from time t (after a seek / restart) */
+  reset(t: number) {
+    this.spikes = [];
+    this.shards = [];
+    this.nextBeat = Math.floor((t - BEAT_OFFSET) / BEAT) + ERUPT_LEAD + 1;
+    this.scene = -1;
+  }
+
+  /** @param playerOffset glider offset from the path, used by "aimed" bars */
+  update(t: number, world: World, playerOffset: THREE.Vector2) {
+    this.player.copy(playerOffset);
+    if (world.sceneIndex !== this.scene) {
+      // terrain was rebuilt: anything placed on the old geometry no longer fits
+      this.scene = world.sceneIndex;
+      this.spikes = [];
+      this.shards = [];
+      const col = new THREE.Color(PRESETS[this.scene].hazards?.color ?? '#ffffff');
+      this.spikeMat.emissive.copy(col).multiplyScalar(0.55);
+    }
+
+    const window = (ERUPT_LEAD + TELEGRAPH_BEATS + 0.5) * BEAT;
+    while (beatTime(this.nextBeat) - window <= t) {
+      this.spawnBeat(this.nextBeat, world);
+      this.nextBeat++;
+    }
+
+    const camZ = world.camera.position.z;
+    this.spikes = this.spikes.filter((s) => s.base.z < camZ + 6);
+    this.shards = this.shards.filter((s) => s.pos.z < camZ + 4 && (s.takenAt === 0 || t - s.takenAt < 0.25));
+
+    let n = 0;
+    for (const s of this.spikes) {
+      const tE = beatTime(s.passBeat - ERUPT_LEAD);
+      const tel = THREE.MathUtils.clamp((t - (tE - TELEGRAPH_BEATS * BEAT)) / (TELEGRAPH_BEATS * BEAT), 0, 1);
+      let rise = t < tE ? 0 : easeOutBack(Math.min(1, (t - tE) / (RISE_BEATS * BEAT)));
+      if (s.hitAt > 0) rise *= Math.max(0, 1 - (t - s.hitAt) / 0.2);
+      s.rise = rise;
+
+      // ring: builds up during the telegraph, fades after eruption
+      const ringGlow = t < tE ? tel * (0.55 + 0.45 * Math.sin(tel * Math.PI * 4) ** 2) : Math.max(0, 1 - (t - tE) / BEAT);
+      this.s.setScalar(s.radius * (2 - tel * 0.6));
+      this.tmpPos.copy(s.base).addScaledVector(s.dir, 0.9);
+      this.m.compose(this.tmpPos, s.quat, this.s);
+      this.ringMesh.setMatrixAt(n, this.m);
+      this.ringMesh.setColorAt(n, this.c.copy(s.color).multiplyScalar(ringGlow * 2));
+
+      this.s.set(s.radius, Math.max(0.001, s.height * rise), s.radius);
+      this.m.compose(s.base, s.quat, this.s);
+      this.spikeMesh.setMatrixAt(n, this.m);
+      const glow = s.grazedAt > 0 ? Math.max(0, 1 - (t - s.grazedAt) / 0.35) : 0;
+      this.spikeMesh.setColorAt(n, this.c.copy(s.color).lerp(WHITE, glow * 0.8).multiplyScalar(1 + glow * 1.5));
+      n++;
+    }
+    finish(this.spikeMesh, n);
+    finish(this.ringMesh, n);
+
+    let k = 0;
+    for (const sh of this.shards) {
+      const taken = sh.takenAt > 0 ? (t - sh.takenAt) / 0.25 : 0;
+      const scale = taken > 0 ? 1 + taken * 2 : 1 + 0.15 * Math.sin(t * 9 + sh.pos.z);
+      this.q.setFromAxisAngle(Y_AXIS, t * 3 + sh.pos.x);
+      this.s.setScalar(scale);
+      this.m.compose(sh.pos, this.q, this.s);
+      this.shardMesh.setMatrixAt(k, this.m);
+      this.shardMesh.setColorAt(k, this.c.set('#ffd84a').multiplyScalar(2.6 * (1 - taken)));
+      k++;
+    }
+    finish(this.shardMesh, k);
+  }
+
+  /** collide the glider (a sphere) against erupted spikes (cones) and shards */
+  test(p: THREE.Vector3, t: number, radius: number, grazeRadius: number, shardRadius: number): HazardContact {
+    const out: HazardContact = { hit: false, grazes: [], shards: [], near: 0 };
+    const ab = this.tmpDir;
+    for (const s of this.spikes) {
+      if (s.rise < 0.15 || s.hitAt > 0) continue;
+      const h = s.height * s.rise;
+      if (Math.abs(s.base.z - p.z) > h + s.radius + grazeRadius) continue;
+      ab.copy(s.dir).multiplyScalar(h);
+      const u = THREE.MathUtils.clamp(this.tmpPos.copy(p).sub(s.base).dot(ab) / (h * h), 0, 1);
+      const axisPoint = this.tmpPos.copy(s.base).addScaledVector(ab, u);
+      const gap = axisPoint.distanceTo(p) - s.radius * (1 - u);
+      if (gap < radius) {
+        out.hit = true;
+        s.hitAt = t;
+      } else if (gap < grazeRadius) {
+        out.near = Math.max(out.near, 1 - (gap - radius) / (grazeRadius - radius));
+        if (s.grazedAt === 0) {
+          s.grazedAt = t;
+          out.grazes.push(axisPoint.clone());
+        }
+      }
+    }
+    for (const sh of this.shards) {
+      if (sh.takenAt === 0 && sh.pos.distanceTo(p) < shardRadius) {
+        sh.takenAt = t;
+        out.shards.push(sh.pos.clone());
+      }
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------- placement
+
+  private spawnBeat(beat: number, world: World) {
+    const tp = beatTime(beat);
+    const tEarly = tp - (ERUPT_LEAD + TELEGRAPH_BEATS) * BEAT;
+    const idx = world.sceneIndex;
+    const here = locate(tp);
+    if (here.scene !== idx || locate(tEarly).scene !== idx) return;
+    const p = PRESETS[idx];
+    const hz = p.hazards;
+    if (!hz) return;
+
+    // structure: one pattern per bar; the last bar of a scene is left clear for the transition
+    const barInScene = Math.floor(here.sceneTime / (BEAT * 4));
+    const barsInScene = Math.round(here.sceneLen / (BEAT * 4));
+    if (barInScene >= barsInScene - 1) return;
+    const beatInBar = ((beat % 4) + 4) % 4;
+    const pattern = hz.patterns.length ? hz.patterns[barInScene % hz.patterns.length] : null;
+    // density ramps up through the scene
+    const ramp = 0.75 + (0.5 * here.sceneTime) / here.sceneLen;
+    const z = zAt(tp) - GLIDER_AHEAD;
+    const h = (salt: number) => hash2(beat, salt, SEED);
+    const tube = hz.place === 'wall';
+    const hw = p.play.halfWidth;
+
+    if (pattern === 'wall' && beatInBar === 0) {
+      if (tube) {
+        // block the half of the tunnel opposite the gap; the tips cross the centre
+        const open = h(1) * Math.PI * 2;
+        for (let i = -2; i <= 2; i++) this.spikeTube(world, p, open + Math.PI + i * 0.62, z, beat, 'cross', h(10 + i));
+        this.addShard(world, z, Math.cos(open) * hw * 0.7, Math.sin(open) * hw * 0.7);
+      } else {
+        const r = hz.radius[1];
+        const gapX = (h(1) * 2 - 1) * hw * 0.65;
+        const gapHalf = 2.6;
+        let i = 0;
+        for (let x = -hw - 2; x <= hw + 2; x += r * 1.7, i++) {
+          if (Math.abs(x - gapX) < gapHalf + r * 0.6) continue;
+          this.spikeFlat(world, p, x, z, beat, 'tall', r, h(20 + i));
+        }
+        this.addShard(world, z, gapX, 0);
+      }
+    } else if (pattern === 'slalom') {
+      const side = beatInBar % 2 === 0 ? -1 : 1;
+      if (tube) {
+        const a = h(1) * 0.3 + beatInBar * (Math.PI / 2);
+        this.spikeTube(world, p, a, z, beat, 'cross', h(2));
+        this.addShard(world, z, Math.cos(a + Math.PI) * hw * 0.6, Math.sin(a + Math.PI) * hw * 0.6);
+      } else {
+        this.spikeFlat(world, p, side * hw * 0.45, z, beat, 'tall', lerp(hz.radius[0], hz.radius[1], h(2)), h(3));
+        this.addShard(world, z, -side * hw * 0.2, 0);
+      }
+    } else if (pattern === 'aimed' && beatInBar % 2 === 0) {
+      const px = this.player.x + (h(1) - 0.5) * 1.5;
+      const py = this.player.y + (h(2) - 0.5) * 1.5;
+      if (tube) {
+        const a = Math.hypot(px, py) > 1 ? Math.atan2(py, px) : h(3) * Math.PI * 2;
+        this.spikeTube(world, p, a, z, beat, 'cross', h(4));
+      } else {
+        this.spikeFlat(world, p, px, z, beat, 'tall', lerp(hz.radius[0], hz.radius[1], h(4)), h(5));
+      }
+    } else if (pattern) {
+      // scatter bars, and the remaining beats of aimed / wall bars
+      const density = (pattern === 'scatter' ? hz.perBeat : hz.perBeat * 0.4) * ramp;
+      const count = Math.floor(density) + (h(1) < density % 1 ? 1 : 0);
+      for (let k = 0; k < count; k++) {
+        const hk = (salt: number) => h(30 + k * 7 + salt);
+        if (tube) {
+          this.spikeTube(world, p, hk(1) * Math.PI * 2, z, beat, hk(2) < 0.5 ? 'cross' : 'low', hk(3));
+        } else {
+          const x = (hk(1) * 2 - 1) * (hz.spread ?? 0.9) * hw * 1.15;
+          this.spikeFlat(world, p, x, z, beat, hk(2) < 0.55 ? 'tall' : 'low', lerp(hz.radius[0], hz.radius[1], hk(3)), hk(4));
+        }
+      }
+    }
+
+    // free-floating shards (skim rewards) — and the whole content of shard-only scenes
+    const shardsPerBar = hz.shards ?? 1;
+    if (h(90) < shardsPerBar / 4) {
+      const a = h(91) * Math.PI * 2;
+      const rr = hw * (0.3 + h(92) * 0.6);
+      if (tube) this.addShard(world, z, Math.cos(a) * rr, Math.sin(a) * rr);
+      else this.addShard(world, z, (h(91) * 2 - 1) * hw * 0.8, -p.play.down * 0.75);
+    }
+  }
+
+  /** a spike on a floor or ceiling; "tall" reaches past the whole flight corridor, "low" can be skimmed over */
+  private spikeFlat(world: World, p: ScenePreset, x: number, z: number, beat: number, kind: 'tall' | 'low', radius: number, rnd: number) {
+    const hz = p.hazards!;
+    const ceiling = hz.place === 'ceiling' || (hz.place === 'both' && rnd > 0.5);
+    const layer = world.terrain.find((l) => l.kind === (ceiling ? 'ceiling' : 'floor'));
+    if (!layer) return;
+    const base = new THREE.Vector3();
+    const dir = new THREE.Vector3();
+    layer.surfacePoint(x, z, base, dir);
+    world.pathPoint(z, this.path);
+    const lo = this.path.y - p.play.down;
+    const hi = this.path.y + p.play.up;
+    let tipY: number;
+    if (kind === 'tall') tipY = ceiling ? lo - 3 : hi + 3;
+    else tipY = ceiling ? hi - (hi - lo) * (0.2 + rnd * 0.3) : lo + (hi - lo) * (0.2 + rnd * 0.3);
+    const height = Math.max(2, Math.abs(tipY - base.y));
+    this.addSpike(base, dir, radius, height, beat, rnd, p);
+  }
+
+  /** a spike from a tunnel wall; "cross" reaches just past the centre line, "low" stops short of it */
+  private spikeTube(world: World, p: ScenePreset, angle: number, z: number, beat: number, kind: 'cross' | 'low', rnd: number) {
+    const layer: TerrainLayer | undefined = world.terrain.find((l) => l.kind === 'tube');
+    if (!layer) return;
+    const base = new THREE.Vector3();
+    const dir = new THREE.Vector3();
+    layer.surfacePoint(angle, z, base, dir);
+    world.pathPoint(z, this.path);
+    const dist = Math.hypot(base.x - this.path.x, base.y - this.path.y);
+    const height = kind === 'cross' ? dist + 1.2 : dist - p.play.halfWidth * (0.35 + rnd * 0.3);
+    const hz = p.hazards!;
+    this.addSpike(base, dir, lerp(hz.radius[0], hz.radius[1], rnd), Math.max(2, height), beat, rnd, p);
+  }
+
+  private addSpike(base: THREE.Vector3, dir: THREE.Vector3, radius: number, height: number, beat: number, rnd: number, p: ScenePreset) {
+    // sink the base into the ground a little so it never floats
+    base.addScaledVector(dir, -0.8);
+    const quat = new THREE.Quaternion().setFromUnitVectors(Y_AXIS, dir);
+    quat.multiply(new THREE.Quaternion().setFromAxisAngle(Y_AXIS, rnd * Math.PI * 2));
+    this.spikes.push({
+      passBeat: beat,
+      base,
+      dir,
+      quat,
+      radius,
+      height: height + 0.8,
+      rise: 0,
+      grazedAt: 0,
+      hitAt: 0,
+      color: new THREE.Color(p.hazards!.color).multiplyScalar(0.9 + rnd * 0.2),
+    });
+    if (this.spikes.length > MAX_SPIKES) this.spikes.shift();
+  }
+
+  /** a shard at an offset from the path; it is nudged out of any terrain */
+  private addShard(world: World, z: number, ox: number, oy: number) {
+    world.pathPoint(z, this.path);
+    const pos = new THREE.Vector3(this.path.x + ox, this.path.y + oy, z);
+    for (let i = 0; i < 8 && world.clearance(pos.x, pos.y, pos.z) < 1.2; i++) {
+      pos.x += (this.path.x - pos.x) * 0.3;
+      pos.y += (this.path.y - pos.y) * 0.3;
+    }
+    this.shards.push({ pos, takenAt: 0 });
+    if (this.shards.length > MAX_SHARDS) this.shards.shift();
+  }
+}
+
+const WHITE = new THREE.Color(1, 1, 1);
+
+function easeOutBack(x: number) {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+}
+
+function additive() {
+  return new THREE.MeshBasicNodeMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+}
+
+function instanced(geo: THREE.BufferGeometry, mat: THREE.Material, max: number) {
+  const m = new THREE.InstancedMesh(geo, mat, max);
+  m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  m.setColorAt(0, new THREE.Color());
+  m.frustumCulled = false;
+  m.count = 0;
+  return m;
+}
+
+function finish(m: THREE.InstancedMesh, n: number) {
+  m.count = n;
+  m.instanceMatrix.needsUpdate = true;
+  if (m.instanceColor) m.instanceColor.needsUpdate = true;
+}

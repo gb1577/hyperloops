@@ -63,7 +63,9 @@ satisfying "juice" moment. The risk is that free unlimited shooting kills the gr
 
 ## 5. Level structure — the 10 scenes from the video
 
-Each scene = 8 bars at ~160 BPM ≈ 12 s, so a full loop is 2 min, exactly the video.
+In the video each scene is 8 bars (12 s). In the game a level repeats its 8-bar music section seamlessly:
+32 bars (~48 s) per level, 16 for the Wire Cave breather, 8 for the Wire Night outro (~6.5 min per loop).
+Dying restarts the current level.
 Every scene keeps its look and adds **one** signature mechanic.
 
 | # | Scene | Look (from video) | Gameplay signature | Music role |

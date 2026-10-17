@@ -89,6 +89,71 @@ export class TerrainLayer {
     this.material.dispose();
   }
 
+  get kind() {
+    return this.spec.kind;
+  }
+
+  /**
+   * Signed free space at a world point: > 0 is open air, < 0 is inside rock.
+   * Uses the same deterministic displacement as the mesh (minus vertex jitter), so it is a close fit.
+   */
+  clearance(x: number, y: number, z: number): number {
+    const s = this.spec;
+    if (s.kind === 'floor') return y - (s.base + this.dispAt(x, z));
+    if (s.kind === 'ceiling') return s.base - this.dispAt(x, z) - y;
+    const c = tubeCenter(s, z);
+    const dx = x - c.x;
+    const dy = y - c.y;
+    const wall = Math.max(s.size - this.dispAt(Math.atan2(dy, dx), z), s.minRadius ?? 0);
+    return wall - Math.hypot(dx, dy);
+  }
+
+  /** Surface point and the direction pointing into open air. u = x for floor/ceiling, angle for tubes. */
+  surfacePoint(u: number, z: number, outPos: THREE.Vector3, outDir: THREE.Vector3) {
+    const s = this.spec;
+    const d = this.dispAt(u, z);
+    if (s.kind === 'floor') {
+      outPos.set(u, s.base + d, z);
+      outDir.set(0, 1, 0);
+    } else if (s.kind === 'ceiling') {
+      outPos.set(u, s.base - d, z);
+      outDir.set(0, -1, 0);
+    } else {
+      const c = tubeCenter(s, z);
+      const wall = Math.max(s.size - d, s.minRadius ?? 0);
+      outPos.set(c.x + Math.cos(u) * wall, c.y + Math.sin(u) * wall, z);
+      outDir.set(-Math.cos(u), -Math.sin(u), 0);
+    }
+  }
+
+  /** bilinear displacement over the un-jittered grid */
+  private dispAt(u: number, z: number): number {
+    const s = this.spec;
+    const rf = -z / this.cellZ;
+    const r0 = Math.floor(rf);
+    const fz = rf - r0;
+    let d00: number, d10: number, d01: number, d11: number, fx: number;
+    if (s.kind === 'tube') {
+      const TAU = Math.PI * 2;
+      const af = ((((u % TAU) + TAU) % TAU) / TAU) * this.cols;
+      const i0 = Math.floor(af) % this.cols;
+      const i1 = (i0 + 1) % this.cols;
+      fx = af - Math.floor(af);
+      const at = (i: number, r: number) => {
+        const a0 = (i / this.cols) * TAU;
+        return this.displacement(i, r, a0 * s.size, -r * this.cellZ, a0);
+      };
+      d00 = at(i0, r0); d10 = at(i1, r0); d01 = at(i0, r0 + 1); d11 = at(i1, r0 + 1);
+    } else {
+      const gf = u / s.cell;
+      const g0 = Math.floor(gf);
+      fx = gf - g0;
+      const at = (g: number, r: number) => this.displacement(g, r, g * s.cell, -r * this.cellZ, 0);
+      d00 = at(g0, r0); d10 = at(g0 + 1, r0); d01 = at(g0, r0 + 1); d11 = at(g0 + 1, r0 + 1);
+    }
+    return lerp(lerp(d00, d10, fx), lerp(d01, d11, fx), fz);
+  }
+
   private displacement(i: number, r: number, across: number, z: number, angle: number): number {
     const s = this.spec;
     const nx = across * s.freq[0];

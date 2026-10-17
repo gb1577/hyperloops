@@ -1,15 +1,17 @@
 import * as THREE from 'three/webgpu';
-import { float, fract, length, mix, pass, rand, screenUV, smoothstep, time, uniform, vec2, vec3, vec4 } from 'three/tsl';
+import { float, fract, length, luminance, mix, pass, rand, screenUV, smoothstep, time, uniform, vec2, vec3, vec4 } from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import type { ScenePreset } from '../scenes/types';
 
-/** Bloom → exposure → tinted vignette → white flash → fade → grain. */
+/** Bloom → exposure → tinted vignette → haze → desaturate → white flash → fade → grain. */
 export class Post {
   readonly pipeline: THREE.RenderPipeline;
   readonly flash = uniform(0);
   readonly fade = uniform(0);
   readonly vignette = uniform(0.7);
   readonly exposure = uniform(1);
+  /** 0..1 drains colour out of the frame (hit feedback) */
+  readonly desat = uniform(0);
   private readonly vignetteColor = uniform(new THREE.Color());
   private readonly grain = uniform(0.08);
   private readonly hazeColor = uniform(new THREE.Color());
@@ -30,6 +32,7 @@ export class Post {
     // screenUV.y runs top (0) → bottom (1)
     const haze = smoothstep(float(1).sub(this.hazeHeight), 1.0, screenUV.y).mul(this.hazeAmount);
     c = mix(c, this.hazeColor, haze);
+    c = mix(c, vec3(luminance(c)).mul(0.85), this.desat);
     c = mix(c, vec3(6), this.flash);
     c = c.mul(float(1).sub(this.fade));
     c = c.add(rand(screenUV.add(fract(time))).sub(0.5).mul(this.grain));
