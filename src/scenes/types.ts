@@ -1,3 +1,5 @@
+import type { SectionRef } from '../core/tracks';
+
 export type Hex = string;
 
 export interface TerrainLayerSpec {
@@ -41,8 +43,10 @@ export interface TerrainLayerSpec {
 
 export interface ScenePreset {
   name: string;
-  /** level length in bars; the scene's 8-bar music section repeats to fill it */
+  /** level length in bars (multiple of 8) */
   bars: number;
+  /** the 8-bar music sections that fill the level, in order (cycled); default: this scene's section of the original track */
+  music?: SectionRef[];
   sky: {
     top: Hex;
     horizon: Hex;
@@ -101,10 +105,14 @@ export interface ScenePreset {
     radius: [number, number];
     /** floor / ceiling / both (floor+ceiling) / wall (tube) */
     place: 'floor' | 'ceiling' | 'both' | 'wall';
+    /** share of spikes that are dark obsidian: cannot be shot, must be dodged (default 0.25) */
+    obsidian?: number;
     /** fraction of the play width spikes are scattered across (floor scenes) */
     spread?: number;
     color: Hex;
   };
+  /** a hard disc of light at the far end of a tunnel that hides where it stops */
+  endGlow?: { distance: number; radius: number; intensity: number };
   transition: 'flash' | 'cut';
   /** ramp vignette/fade to black across the scene (0..1 at end) */
   fadeOut?: number;

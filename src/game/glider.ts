@@ -2,8 +2,11 @@ import * as THREE from 'three/webgpu';
 import { vec3 } from 'three/tsl';
 import type { ScenePreset } from '../scenes/types';
 import type { Steer } from './input';
+import { isTube, laneCount, laneOffset, normLane } from './lanes';
 
-const MAX_SPEED = 24;
+const MAX_SPEED = 34;
+/** lane snap rate: ~80 ms to settle */
+const SNAP = 32;
 const TRAIL_SEGMENTS = 22;
 const TRAIL_SECONDS = 0.22;
 
@@ -15,6 +18,12 @@ export class Glider {
   readonly vel = new THREE.Vector2();
   readonly position = new THREE.Vector3();
   bank = 0;
+  /** lane mode state */
+  lane = 2;
+  /** tunnels: current angle around the wall; the camera rolls by `spin` to keep the glider at the bottom */
+  spin = 0;
+  private angle = -Math.PI / 2;
+  private wasTube = false;
   private readonly body: THREE.Group;
   private readonly trail: THREE.Mesh;
   private readonly trailPos: Float32Array;
@@ -38,7 +47,7 @@ export class Glider {
     this.body.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 1), edgeMat));
     this.body.scale.setScalar(1.25);
     const coreMat = new THREE.MeshBasicNodeMaterial({ fog: false });
-    coreMat.colorNode = vec3(5, 7, 8);
+    coreMat.colorNode = vec3(2.6, 3.6, 4.2);
     const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22, 0), coreMat);
     core.position.set(0, 0.05, 0.55);
     this.body.add(core);
@@ -84,6 +93,49 @@ export class Glider {
     this.vel.set(0, 0);
     this.bank = 0;
     this.history.length = 0;
+    this.lane = 2;
+    this.angle = -Math.PI / 2;
+    this.spin = 0;
+  }
+
+  /** Lane mode: snap between discrete lanes. steps = lane changes requested this frame. */
+  updateLanes(dt: number, time: number, steps: number, pointerX: number | null, preset: ScenePreset, path: THREE.Vector3) {
+    const tube = isTube(preset);
+    const n = laneCount(preset);
+    if (tube !== this.wasTube) {
+      // switching between floor and tunnel levels: start from the middle / bottom
+      this.lane = tube ? 0 : Math.floor(n / 2);
+      this.wasTube = tube;
+    }
+    this.lane = normLane(preset, this.lane + steps);
+    if (pointerX !== null && !tube) this.lane = normLane(preset, Math.round(((pointerX * 1.2 + 1) / 2) * (n - 1)));
+
+    const k = 1 - Math.exp(-dt * SNAP);
+    const px = this.offset.x;
+    const py = this.offset.y;
+    if (tube) {
+      const target = -Math.PI / 2 + this.lane * ((Math.PI * 2) / n);
+      let d = target - this.angle;
+      d = Math.atan2(Math.sin(d), Math.cos(d)); // shortest way round
+      this.angle += d * k;
+      const r = preset.play.halfWidth * 0.9;
+      this.offset.set(Math.cos(this.angle) * r, Math.sin(this.angle) * r);
+      this.spin = this.angle + Math.PI / 2;
+    } else {
+      const t = laneOffset(preset, this.lane);
+      this.offset.x += (t.x - this.offset.x) * k;
+      this.offset.y += (t.y - this.offset.y) * k;
+      this.spin = 0;
+    }
+    if (dt > 0) this.vel.set((this.offset.x - px) / dt, (this.offset.y - py) / dt);
+    // bank into the move (tangential speed in tunnels)
+    const side = tube ? -Math.sin(this.angle) * this.vel.x + Math.cos(this.angle) * this.vel.y : this.vel.x;
+    this.bank += (-(side / 40) * 0.9 - this.bank) * Math.min(1, dt * 14);
+
+    this.position.set(path.x + this.offset.x, path.y + this.offset.y, path.z);
+    this.group.position.copy(this.position);
+    this.body.rotation.set(0, 0, this.spin + this.bank);
+    this.updateTrail(time);
   }
 
   update(dt: number, time: number, steer: Steer, preset: ScenePreset, path: THREE.Vector3) {
@@ -96,8 +148,8 @@ export class Glider {
     if (steer.target) {
       const tx = steer.target.x * play.halfWidth;
       const ty = tube ? steer.target.y * play.halfWidth : steer.target.y * (steer.target.y > 0 ? play.up : play.down);
-      dvx = (tx - this.offset.x) * 7;
-      dvy = (ty - this.offset.y) * 7;
+      dvx = (tx - this.offset.x) * 14;
+      dvy = (ty - this.offset.y) * 14;
       const m = Math.hypot(dvx, dvy);
       if (m > MAX_SPEED) {
         dvx *= MAX_SPEED / m;
@@ -107,7 +159,7 @@ export class Glider {
       dvx = steer.axis.x * MAX_SPEED;
       dvy = steer.axis.y * MAX_SPEED;
     }
-    const k = Math.min(1, dt * 10);
+    const k = 1 - Math.exp(-dt * 25);
     this.vel.x += (dvx - this.vel.x) * k;
     this.vel.y += (dvy - this.vel.y) * k;
     this.offset.x += this.vel.x * dt;
@@ -125,6 +177,7 @@ export class Glider {
     this.bank += (-(this.vel.x / MAX_SPEED) * 0.75 - this.bank) * Math.min(1, dt * 8);
     this.position.set(path.x + this.offset.x, path.y + this.offset.y, path.z);
     this.group.position.copy(this.position);
+    this.spin = 0;
     this.body.rotation.set((this.vel.y / MAX_SPEED) * 0.35, 0, this.bank);
 
     this.updateTrail(time);

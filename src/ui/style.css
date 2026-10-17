@@ -63,3 +63,13 @@ canvas { display: block; position: fixed; inset: 0; width: 100vw !important; hei
   100% { opacity: 0; transform: translate(-50%, -34px) scale(1); } }
 #ghud .pop.shard { color: #ffd84a; font-size: 12px; }
 #ghud .banner.hint { font-size: clamp(14px, 2vw, 20px); letter-spacing: .35em; font-weight: 500; top: 22%; }
+#ghud .lock { position: absolute; left: -13px; top: -13px; width: 26px; height: 26px; display: none;
+  border: 2px solid #ff4d6d; box-shadow: 0 0 10px #ff4d6d; }
+#ghud .beatring { position: absolute; left: -34px; top: -34px; width: 68px; height: 68px; border-radius: 50%; display: none;
+  border: 2px solid #ffe066; box-shadow: 0 0 12px #ffe06688; }
+#ghud .flux.dry { animation: dry .4s ease-out; }
+@keyframes dry { 0%, 60% { background: #ff4d6d88; box-shadow: 0 0 14px #ff4d6d; } 100% { background: #0006; } }
+#ghud .pop.judge { font-size: 18px; letter-spacing: .25em; }
+#ghud .pop.judge.perfect { color: #ffe066; font-size: 22px; }
+#ghud .pop.judge.good { color: #ffffff; }
+#ghud .pop.judge.off { color: #9aa0b0; font-size: 14px; }

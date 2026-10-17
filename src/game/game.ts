@@ -8,7 +8,10 @@ import { Glider } from './glider';
 import { Hazards } from './hazards';
 import { SparkFX } from './fx';
 import { Sfx } from './sfx';
+import { LOCK_COST, Weapon, type Volley } from './weapon';
+import { BEAT, BEAT_OFFSET } from '../core/beatclock';
 import type { Input } from './input';
+import { LaneGuides, laneSpacing } from './lanes';
 
 const SHIELDS = 3;
 const GLIDER_RADIUS = 0.5;
@@ -21,11 +24,25 @@ const DEATH_SECONDS = 0.75;
 
 export type GameState = 'title' | 'play' | 'dead';
 
+const LANE_HINTS: [number, string][] = [
+  [2.5, 'SWITCH LANES · ← → · A D · MOUSE'],
+  [8, 'PASS RIGHT NEXT TO A SPIKE TO GRAZE IT'],
+  [14, 'COLLECT THE GOLD SHARDS'],
+  [20, "DON'T TOUCH · 3 SHIELDS"],
+];
 const HINTS: [number, string][] = [
   [2.5, 'STEER · MOUSE · WASD · ARROWS'],
   [8, 'FLY CLOSE TO SPIKES TO GRAZE THEM'],
   [14, 'COLLECT THE GOLD SHARDS'],
   [20, "DON'T TOUCH · 3 SHIELDS"],
+];
+const FIRE_HINTS: [number, string][] = [
+  [2.5, 'STEER · MOUSE · WASD · ARROWS'],
+  [8, 'FLY CLOSE TO SPIKES TO GRAZE THEM'],
+  [14, 'HOLD SPACE / CLICK TO LOCK ON CRYSTALS'],
+  [20, 'RELEASE ON THE BEAT TO SHATTER THEM'],
+  [26, "DARK SPIKES CAN'T BE SHOT · DODGE THEM"],
+  [32, 'GRAZE + SHARDS REFILL YOUR FLUX'],
 ];
 
 /** M1 core loop: steer, graze, collect, get hit, restart the level instantly. */
@@ -33,6 +50,8 @@ export class Game {
   state: GameState = 'title';
   /** dev: ignore hits */
   god = false;
+  /** alternative control scheme kept for comparison (L): snap between lanes instead of free flight */
+  laneMode = false;
 
   score = 0;
   combo = 0;
@@ -42,6 +61,13 @@ export class Game {
   readonly glider = new Glider();
   readonly hazards = new Hazards();
   readonly fx = new SparkFX();
+  readonly guides = new LaneGuides();
+  readonly weapon = new Weapon();
+  /** lock-on firing (off: playtest found it didn't add enough; F toggles it for experiments) */
+  firing = false;
+  /** consecutive perfect releases */
+  perfectStreak = 0;
+  private lastDry = 0;
   readonly sfx: Sfx;
 
   private invulnUntil = 0;
@@ -55,7 +81,7 @@ export class Game {
   private hintIndex = 0;
   private readonly path = new THREE.Vector3();
   private readonly screen = new THREE.Vector3();
-  private readonly focus: Focus = { x: 0, y: 0, bank: 0 };
+  private readonly focus: Focus = { x: 0, y: 0, bank: 0, spin: 0 };
 
   constructor(
     private readonly world: World,
@@ -63,7 +89,7 @@ export class Game {
     private readonly hud: GameHud,
     private readonly input: Input,
   ) {
-    world.scene.add(this.glider.group, this.glider.trailMesh, this.hazards.group, this.fx.mesh);
+    world.scene.add(this.glider.group, this.glider.trailMesh, this.hazards.group, this.fx.mesh, this.guides.mesh, this.weapon.beamMesh);
     this.sfx = new Sfx(() => clock.context, () => clock.output);
   }
 
@@ -76,8 +102,16 @@ export class Game {
     this.restart(0);
   }
 
+  setLaneMode(on: boolean, t: number) {
+    this.laneMode = on;
+    this.hazards.laneMode = on;
+    this.onSeek(t);
+    this.hud.banner(on ? 'LANES' : 'FREE FLIGHT', 1200, 'hint');
+  }
+
   /** the clock was moved externally (debug scene jump) */
   onSeek(t: number) {
+    this.weapon.reset();
     this.hazards.reset(t);
     this.glider.reset();
     this.lastTime = t;
@@ -100,8 +134,9 @@ export class Game {
     this.lastScene = idx;
 
     // first-run how-to-play, during the opening level
-    if (this.state === 'play' && info.loop === 0 && idx === 0 && this.hintIndex < HINTS.length) {
-      const [at, text] = HINTS[this.hintIndex];
+    const hints = this.laneMode ? LANE_HINTS : this.firing ? FIRE_HINTS : HINTS;
+    if (this.state === 'play' && info.loop === 0 && idx === 0 && this.hintIndex < hints.length) {
+      const [at, text] = hints[this.hintIndex];
       if (info.sceneTime >= at) {
         this.hud.banner(text, 3200, 'hint');
         this.hintIndex++;
@@ -111,13 +146,21 @@ export class Game {
     // glider
     const gz = zAt(t) - GLIDER_AHEAD;
     this.world.pathPoint(gz, this.path);
-    const steer = this.input.read();
-    if (this.state !== 'play') steer.axis = { x: 0, y: 0 };
-    if (this.state !== 'play') steer.target = null;
-    this.glider.update(dt, t, steer, preset, this.path);
+    if (this.laneMode) {
+      const steps = this.input.takeLaneSteps();
+      const px = this.input.pointerX();
+      const live = this.state === 'play';
+      this.glider.updateLanes(dt, t, live ? steps : 0, live ? px : null, preset, this.path);
+    } else {
+      const steer = this.input.read();
+      if (this.state !== 'play') steer.axis = { x: 0, y: 0 };
+      if (this.state !== 'play') steer.target = null;
+      this.glider.update(dt, t, steer, preset, this.path);
+    }
     const p = this.glider.position;
 
-    this.hazards.update(t, this.world, this.glider.offset);
+    this.hazards.update(t, dt, this.world, this.glider.position, this.glider.offset, this.glider.lane);
+    this.guides.update(preset, gz, (z, out) => this.world.pathPoint(z, out), this.laneMode);
 
     if (this.state === 'play') this.play(t, now, dt, p);
     else if (this.state === 'dead' && now >= this.deadUntil) this.restart(sceneStart(idx, info.loop));
@@ -133,45 +176,101 @@ export class Game {
 
     this.focus.x = this.glider.offset.x + (Math.random() - 0.5) * this.shake;
     this.focus.y = this.glider.offset.y + (Math.random() - 0.5) * this.shake;
+    // lock reticles + timing ring
+    const locks = this.weapon.locks.map((s) => this.toScreen(this.hazards.tipOf(s, this.screen)));
+    this.hud.setLocks(locks);
+    if (this.state === 'play' && this.weapon.holding) {
+      const audible = info.time - this.clock.latency;
+      const phase = ((((audible - BEAT_OFFSET) / BEAT) % 1) + 1) % 1;
+      this.hud.beatRing(this.toScreen(p), 1 - phase);
+    } else this.hud.beatRing(null, 0);
+
     this.focus.bank = this.glider.bank;
+    this.focus.spin = this.glider.spin;
     return this.focus;
   }
 
+  setFiring(on: boolean) {
+    this.firing = on;
+    this.hazards.obsidianEnabled = on;
+    this.weapon.reset();
+    this.hud.showFlux(on);
+    this.hud.banner(on ? 'FIRING ON' : 'FIRING OFF', 1200, 'hint');
+  }
+
   private play(t: number, now: number, dt: number, p: THREE.Vector3) {
+    if (this.firing) this.fire(t, now, p);
     const mult = this.multiplier;
     this.score += dt * 10 * mult;
 
-    const contact = this.hazards.test(p, t, GLIDER_RADIUS, GRAZE_RADIUS, SHARD_RADIUS);
+    // in lane mode the neighbouring lane counts as a graze
+    const grazeR = this.laneMode ? Math.max(GRAZE_RADIUS, laneSpacing(this.world.preset) * 0.95) : GRAZE_RADIUS;
+    const contact = this.hazards.test(p, t, GLIDER_RADIUS, grazeR, SHARD_RADIUS);
     for (const at of contact.grazes) {
       this.combo++;
-      this.score += 100 * this.multiplier;
-      this.flux = Math.min(1, this.flux + 0.08);
+      this.score += 100 * mult;
+      this.flux = Math.min(1, this.flux + 0.06);
       this.fx.emit(at.lerp(p, 0.6), 16, '#ffffff', 11, now, new THREE.Vector3(0, 0, 14));
-      this.popupAt(p, `GRAZE +${100 * this.multiplier}`, 'graze');
+      this.popupAt(p, `GRAZE +${100 * mult}`, 'graze');
       this.sfx.graze();
     }
     if (now - this.lastShardAt > 1.5) this.shardChain = 0;
     for (const at of contact.shards) {
       this.combo++;
-      this.score += 50 * this.multiplier;
-      this.flux = Math.min(1, this.flux + 0.05);
+      this.score += 50 * mult;
+      this.flux = Math.min(1, this.flux + 0.035);
       this.fx.emit(at, 12, '#ffd84a', 8, now, new THREE.Vector3(0, 0, 12));
-      this.popupAt(p, `+${50 * this.multiplier}`, 'shard');
+      this.popupAt(p, `+${50 * mult}`, 'shard');
       this.sfx.chime(this.shardChain++);
       this.lastShardAt = now;
     }
-    this.flux = Math.min(1, this.flux + contact.near * dt * 0.35);
+    this.flux = Math.min(1, this.flux + contact.near * dt * 0.1);
 
     // terrain: skimming low pays, touching it hurts
     const clear = this.world.clearance(p.x, p.y, p.z);
     if (clear > 0 && clear < SKIM_HEIGHT) {
       const k = 1 - clear / SKIM_HEIGHT;
-      this.flux = Math.min(1, this.flux + dt * 0.2 * k);
+      this.flux = Math.min(1, this.flux + dt * 0.05 * k);
       this.score += dt * 60 * mult * k;
       if (Math.random() < dt * 30 * k) this.fx.emit(p, 1, '#bff6ff', 5, now, new THREE.Vector3(0, 0, 16));
     }
 
     if ((contact.hit || clear < -0.25) && now >= this.invulnUntil && !this.god) this.hit(now, p);
+  }
+
+  private fire(t: number, now: number, p: THREE.Vector3) {
+    const ev = this.weapon.update(now, t, t - this.clock.latency, this.input.fireHeld(), p, this.hazards, this.flux);
+    for (let i = 0; i < ev.locked.length; i++) {
+      this.flux = Math.max(0, this.flux - LOCK_COST);
+      this.sfx.lock(this.weapon.locks.length);
+    }
+    if (ev.dry && now - this.lastDry > 0.5) {
+      this.lastDry = now;
+      this.hud.fluxEmpty();
+      this.sfx.dry();
+    }
+    if (ev.volley) this.scoreVolley(ev.volley, now, p);
+  }
+
+  private scoreVolley(v: Volley, now: number, p: THREE.Vector3) {
+    const perfect = v.judgement === 'perfect';
+    this.perfectStreak = perfect ? this.perfectStreak + 1 : 0;
+    for (const s of v.hits) {
+      this.combo++;
+      this.score += 150 * this.multiplier * (perfect ? 2 : 1);
+      const tip = this.hazards.tipOf(s, new THREE.Vector3());
+      this.fx.emit(tip, 26, s.color, 18, now);
+      this.fx.emit(tip, 8, '#ffffff', 26, now);
+    }
+    this.sfx.volley(v.judgement, v.hits.length);
+    const label =
+      v.judgement === 'perfect'
+        ? `PERFECT ×2${this.perfectStreak > 1 ? ` · ${this.perfectStreak} IN A ROW` : ''}`
+        : v.judgement === 'good'
+          ? 'GOOD'
+          : `OFF BEAT · ${v.error < 0 ? 'EARLY' : 'LATE'}`;
+    this.popupAt(p, label, `judge ${v.judgement}`);
+    if (perfect) this.world.punch(0.18);
   }
 
   private hit(now: number, p: THREE.Vector3) {
@@ -182,8 +281,10 @@ export class Game {
     this.desat = 0.9;
     this.shake = 1.4;
     this.clock.muffle();
-    this.glider.offset.multiplyScalar(0.4);
-    this.glider.vel.set(0, 0);
+    if (!this.laneMode) {
+      this.glider.offset.multiplyScalar(0.4);
+      this.glider.vel.set(0, 0);
+    }
     this.fx.emit(p, 26, '#ffffff', 16, now);
     this.world.punch(0.5);
 
@@ -206,7 +307,9 @@ export class Game {
     this.fx.clear();
     this.score = 0;
     this.combo = 0;
-    this.flux = 0;
+    this.flux = this.firing ? 0.4 : 0;
+    this.perfectStreak = 0;
+    this.weapon.reset();
     this.shields = SHIELDS;
     this.state = 'play';
     this.lastTime = at;
@@ -215,9 +318,12 @@ export class Game {
   }
 
   private popupAt(p: THREE.Vector3, text: string, cls: string) {
+    const s = this.toScreen(p);
+    this.hud.popup(text, s.x, s.y - 40, cls);
+  }
+
+  private toScreen(p: THREE.Vector3) {
     this.screen.copy(p).project(this.world.camera);
-    const x = (this.screen.x * 0.5 + 0.5) * window.innerWidth;
-    const y = (-this.screen.y * 0.5 + 0.5) * window.innerHeight - 40;
-    this.hud.popup(text, x, y, cls);
+    return { x: (this.screen.x * 0.5 + 0.5) * window.innerWidth, y: (-this.screen.y * 0.5 + 0.5) * window.innerHeight };
   }
 }

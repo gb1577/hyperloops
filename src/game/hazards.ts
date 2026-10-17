@@ -6,6 +6,7 @@ import { PRESETS } from '../scenes/presets';
 import type { ScenePreset } from '../scenes/types';
 import { GLIDER_AHEAD, World, zAt } from '../render/world';
 import type { TerrainLayer } from '../render/terrain';
+import { isTube, laneAngle, laneCount, laneOffset, laneSpacing, normLane } from './lanes';
 
 const MAX_SPIKES = 128;
 const MAX_SHARDS = 96;
@@ -19,7 +20,7 @@ const SEED = 9137;
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const beatTime = (b: number) => BEAT_OFFSET + b * BEAT;
 
-interface Spike {
+export interface Spike {
   passBeat: number;
   base: THREE.Vector3;
   dir: THREE.Vector3;
@@ -30,12 +31,19 @@ interface Spike {
   rise: number;
   grazedAt: number;
   hitAt: number;
+  /** shot by the player: shrinks away and stops colliding */
+  shatteredAt: number;
+  /** dark spikes can't be shot */
+  obsidian: boolean;
+  locked: boolean;
   color: THREE.Color;
 }
 
 interface Shard {
   pos: THREE.Vector3;
   takenAt: number;
+  /** dropped by a shattered spike: drifts toward the glider */
+  magnet: boolean;
 }
 
 export interface HazardContact {
@@ -62,6 +70,8 @@ export class Hazards {
   private readonly ringMesh: THREE.InstancedMesh;
   private readonly shardMesh: THREE.InstancedMesh;
   private readonly spikeMat: THREE.MeshLambertNodeMaterial;
+  private readonly obsidianMesh: THREE.InstancedMesh;
+  private readonly glider = new THREE.Vector3();
   private spikes: Spike[] = [];
   private shards: Shard[] = [];
   private nextBeat = 0;
@@ -74,6 +84,11 @@ export class Hazards {
   private readonly tmpDir = new THREE.Vector3();
   private readonly path = new THREE.Vector3();
   private readonly player = new THREE.Vector2();
+  private playerLane = 2;
+  /** dark unshootable spikes only make sense while firing is enabled */
+  obsidianEnabled = false;
+  /** lane prototype: spikes and shards snap to lanes */
+  laneMode = false;
 
   constructor() {
     const cone = new THREE.ConeGeometry(1, 1, 5, 1).toNonIndexed();
@@ -81,6 +96,14 @@ export class Hazards {
     cone.computeVertexNormals();
     this.spikeMat = new THREE.MeshLambertNodeMaterial({ flatShading: true, side: THREE.DoubleSide });
     this.spikeMesh = instanced(cone, this.spikeMat, MAX_SPIKES);
+    const obsidianMat = new THREE.MeshStandardNodeMaterial({
+      color: '#17151f',
+      roughness: 0.22,
+      metalness: 0.7,
+      flatShading: true,
+      side: THREE.DoubleSide,
+    });
+    this.obsidianMesh = instanced(cone, obsidianMat, MAX_SPIKES);
 
     const ring = new THREE.RingGeometry(0.75, 1, 24, 1);
     ring.rotateX(-Math.PI / 2);
@@ -90,7 +113,7 @@ export class Hazards {
     shard.scale(0.75, 1.3, 0.75);
     this.shardMesh = instanced(shard, additive(), MAX_SHARDS);
 
-    this.group.add(this.spikeMesh, this.ringMesh, this.shardMesh);
+    this.group.add(this.spikeMesh, this.obsidianMesh, this.ringMesh, this.shardMesh);
   }
 
   /** forget everything and start scheduling from time t (after a seek / restart) */
@@ -101,9 +124,11 @@ export class Hazards {
     this.scene = -1;
   }
 
-  /** @param playerOffset glider offset from the path, used by "aimed" bars */
-  update(t: number, world: World, playerOffset: THREE.Vector2) {
+  /** @param playerOffset glider offset from the path (and lane), used by "aimed" bars */
+  update(t: number, dt: number, world: World, gliderPos: THREE.Vector3, playerOffset: THREE.Vector2, playerLane: number) {
+    this.glider.copy(gliderPos);
     this.player.copy(playerOffset);
+    this.playerLane = playerLane;
     if (world.sceneIndex !== this.scene) {
       // terrain was rebuilt: anything placed on the old geometry no longer fits
       this.scene = world.sceneIndex;
@@ -124,11 +149,14 @@ export class Hazards {
     this.shards = this.shards.filter((s) => s.pos.z < camZ + 4 && (s.takenAt === 0 || t - s.takenAt < 0.25));
 
     let n = 0;
+    let o = 0;
+    let ri = 0;
     for (const s of this.spikes) {
       const tE = beatTime(s.passBeat - ERUPT_LEAD);
       const tel = THREE.MathUtils.clamp((t - (tE - TELEGRAPH_BEATS * BEAT)) / (TELEGRAPH_BEATS * BEAT), 0, 1);
       let rise = t < tE ? 0 : easeOutBack(Math.min(1, (t - tE) / (RISE_BEATS * BEAT)));
       if (s.hitAt > 0) rise *= Math.max(0, 1 - (t - s.hitAt) / 0.2);
+      if (s.shatteredAt > 0) rise *= Math.max(0, 1 - (t - s.shatteredAt) / 0.12);
       s.rise = rise;
 
       // ring: builds up during the telegraph, fades after eruption
@@ -136,28 +164,41 @@ export class Hazards {
       this.s.setScalar(s.radius * (2 - tel * 0.6));
       this.tmpPos.copy(s.base).addScaledVector(s.dir, 0.9);
       this.m.compose(this.tmpPos, s.quat, this.s);
-      this.ringMesh.setMatrixAt(n, this.m);
-      this.ringMesh.setColorAt(n, this.c.copy(s.color).multiplyScalar(ringGlow * 2));
+      this.ringMesh.setMatrixAt(ri, this.m);
+      this.ringMesh.setColorAt(ri, this.c.copy(s.obsidian ? OBSIDIAN_RING : s.color).multiplyScalar(ringGlow * 2));
+      ri++;
 
       this.s.set(s.radius, Math.max(0.001, s.height * rise), s.radius);
       this.m.compose(s.base, s.quat, this.s);
-      this.spikeMesh.setMatrixAt(n, this.m);
       const glow = s.grazedAt > 0 ? Math.max(0, 1 - (t - s.grazedAt) / 0.35) : 0;
-      this.spikeMesh.setColorAt(n, this.c.copy(s.color).lerp(WHITE, glow * 0.8).multiplyScalar(1 + glow * 1.5));
-      n++;
+      if (s.obsidian) {
+        this.obsidianMesh.setMatrixAt(o, this.m);
+        this.obsidianMesh.setColorAt(o, this.c.setScalar(1 + glow * 2));
+        o++;
+      } else {
+        this.spikeMesh.setMatrixAt(n, this.m);
+        const lock = s.locked ? 0.5 + 0.5 * Math.sin(t * 30) : 0;
+        this.spikeMesh.setColorAt(n, this.c.copy(s.color).lerp(WHITE, glow * 0.8 + lock * 0.4).multiplyScalar(1 + glow * 1.5 + lock));
+        n++;
+      }
     }
     finish(this.spikeMesh, n);
-    finish(this.ringMesh, n);
+    finish(this.obsidianMesh, o);
+    finish(this.ringMesh, ri);
 
     let k = 0;
     for (const sh of this.shards) {
+      if (sh.magnet && sh.takenAt === 0) {
+        const d = sh.pos.distanceTo(this.glider);
+        if (d < 26) sh.pos.lerp(this.glider, Math.min(1, dt * (5 + 60 / Math.max(d, 1))));
+      }
       const taken = sh.takenAt > 0 ? (t - sh.takenAt) / 0.25 : 0;
-      const scale = taken > 0 ? 1 + taken * 2 : 1 + 0.15 * Math.sin(t * 9 + sh.pos.z);
+      const scale = taken > 0 ? 1 + taken * 0.6 : 1 + 0.15 * Math.sin(t * 9 + sh.pos.z);
       this.q.setFromAxisAngle(Y_AXIS, t * 3 + sh.pos.x);
       this.s.setScalar(scale);
       this.m.compose(sh.pos, this.q, this.s);
       this.shardMesh.setMatrixAt(k, this.m);
-      this.shardMesh.setColorAt(k, this.c.set('#ffd84a').multiplyScalar(2.6 * (1 - taken)));
+      this.shardMesh.setColorAt(k, this.c.set('#ffd84a').multiplyScalar(1.9 * (1 - taken)));
       k++;
     }
     finish(this.shardMesh, k);
@@ -168,7 +209,7 @@ export class Hazards {
     const out: HazardContact = { hit: false, grazes: [], shards: [], near: 0 };
     const ab = this.tmpDir;
     for (const s of this.spikes) {
-      if (s.rise < 0.15 || s.hitAt > 0) continue;
+      if (s.rise < 0.15 || s.hitAt > 0 || s.shatteredAt > 0) continue;
       const h = s.height * s.rise;
       if (Math.abs(s.base.z - p.z) > h + s.radius + grazeRadius) continue;
       ab.copy(s.dir).multiplyScalar(h);
@@ -193,6 +234,36 @@ export class Hazards {
       }
     }
     return out;
+  }
+
+  /** crystal spikes ahead that can be locked onto, nearest to the glider's line first */
+  targets(p: THREE.Vector3, t: number, maxAhead = 80): Spike[] {
+    const list: { s: Spike; score: number }[] = [];
+    for (const s of this.spikes) {
+      if (s.obsidian || s.locked || s.shatteredAt > 0 || s.hitAt > 0) continue;
+      const ahead = p.z - s.base.z;
+      if (ahead < 6 || ahead > maxAhead) continue;
+      // only spikes that are erupting or about to (their ring is glowing)
+      if (t < beatTime(s.passBeat - ERUPT_LEAD) - TELEGRAPH_BEATS * BEAT) continue;
+      const tip = this.tipOf(s, this.tmpPos);
+      const side = Math.hypot(tip.x - p.x, tip.y - p.y);
+      list.push({ s, score: side + ahead * 0.15 });
+    }
+    return list.sort((a, b) => a.score - b.score).map((e) => e.s);
+  }
+
+  /** the spike's full-height tip (where lock markers and beams aim) */
+  tipOf(s: Spike, out: THREE.Vector3) {
+    return out.copy(s.base).addScaledVector(s.dir, s.height * 0.75);
+  }
+
+  /** shoot a spike: it shrinks away and drops a shard that flies to the glider */
+  shatter(s: Spike, t: number) {
+    s.shatteredAt = t;
+    s.locked = false;
+    const pos = this.tipOf(s, new THREE.Vector3());
+    this.shards.push({ pos, takenAt: 0, magnet: true });
+    if (this.shards.length > MAX_SHARDS) this.shards.shift();
   }
 
   // ---------------------------------------------------------------- placement
@@ -220,11 +291,16 @@ export class Hazards {
     const tube = hz.place === 'wall';
     const hw = p.play.halfWidth;
 
+    if (this.laneMode) {
+      this.spawnLaneBeat(world, p, beat, beatInBar, pattern, ramp, z, h, idx === 0);
+      return;
+    }
+
     if (pattern === 'wall' && beatInBar === 0) {
       if (tube) {
-        // block the half of the tunnel opposite the gap; the tips cross the centre
+        // block the side of the tunnel opposite the gap; the tips cross the centre
         const open = h(1) * Math.PI * 2;
-        for (let i = -2; i <= 2; i++) this.spikeTube(world, p, open + Math.PI + i * 0.62, z, beat, 'cross', h(10 + i));
+        for (let i = -1; i <= 1; i++) this.spikeTube(world, p, open + Math.PI + i * 0.62, z, beat, 'cross', h(10 + i));
         this.addShard(world, z, Math.cos(open) * hw * 0.7, Math.sin(open) * hw * 0.7);
       } else {
         const r = hz.radius[1];
@@ -258,12 +334,13 @@ export class Hazards {
       }
     } else if (pattern) {
       // scatter bars, and the remaining beats of aimed / wall bars
-      const density = (pattern === 'scatter' ? hz.perBeat : hz.perBeat * 0.4) * ramp;
-      const count = Math.floor(density) + (h(1) < density % 1 ? 1 : 0);
+      // tunnels pack spikes into a small circle, so they get fewer per beat
+      const density = (pattern === 'scatter' ? hz.perBeat : hz.perBeat * 0.4) * ramp * (tube ? 0.75 : 1);
+      const count = Math.min(tube ? 2 : 4, Math.floor(density) + (h(1) < density % 1 ? 1 : 0));
       for (let k = 0; k < count; k++) {
         const hk = (salt: number) => h(30 + k * 7 + salt);
         if (tube) {
-          this.spikeTube(world, p, hk(1) * Math.PI * 2, z, beat, hk(2) < 0.5 ? 'cross' : 'low', hk(3));
+          this.spikeTube(world, p, hk(1) * Math.PI * 2, z, beat, hk(2) < 0.35 ? 'cross' : 'low', hk(3));
         } else {
           const x = (hk(1) * 2 - 1) * (hz.spread ?? 0.9) * hw * 1.15;
           this.spikeFlat(world, p, x, z, beat, hk(2) < 0.55 ? 'tall' : 'low', lerp(hz.radius[0], hz.radius[1], hk(3)), hk(4));
@@ -279,6 +356,69 @@ export class Hazards {
       if (tube) this.addShard(world, z, Math.cos(a) * rr, Math.sin(a) * rr);
       else this.addShard(world, z, (h(91) * 2 - 1) * hw * 0.8, -p.play.down * 0.75);
     }
+  }
+
+  /** lane mode: every spike sits on a lane; the neighbouring lane is a graze */
+  private spawnLaneBeat(
+    world: World,
+    p: ScenePreset,
+    beat: number,
+    beatInBar: number,
+    pattern: string | null,
+    ramp: number,
+    z: number,
+    h: (salt: number) => number,
+    firstLevel: boolean,
+  ) {
+    const hz = p.hazards!;
+    const n = laneCount(p);
+    const tube = isTube(p);
+    const block = (lane: number, salt: number) => this.spikeLane(world, p, normLane(p, lane), z, beat, h(salt));
+    const shard = (lane: number) => {
+      const o = laneOffset(p, normLane(p, lane));
+      this.addShard(world, z, o.x, o.y);
+    };
+
+    if (pattern === 'wall' && beatInBar === 0) {
+      const gap = Math.floor(h(1) * n);
+      const open = tube || firstLevel ? 2 : 1;
+      for (let i = 0; i < n; i++) if ((((i - gap) % n) + n) % n >= open) block(i, 10 + i);
+      shard(gap);
+    } else if (pattern === 'slalom' && beatInBar % 2 === 0) {
+      // block alternating halves every half bar: swing across
+      const half = beatInBar === 0 ? 0 : 1;
+      if (tube) {
+        const start = Math.floor(h(1) * n) + half * (n / 2);
+        for (let i = 0; i < n / 2; i++) block(start + i, 10 + i);
+        shard(start + n / 2 + 1);
+      } else {
+        const lanes = half === 0 ? [0, 1, 2] : [2, 3, 4];
+        for (const l of lanes) block(l, 10 + l);
+        shard(half === 0 ? 4 : 0);
+      }
+    } else if (pattern === 'aimed' && beatInBar % 2 === 0) {
+      block(this.playerLane, 3);
+      shard(this.playerLane + (h(4) < 0.5 ? -1 : 1));
+    } else if (pattern) {
+      const density = (pattern === 'scatter' ? hz.perBeat : hz.perBeat * 0.4) * ramp;
+      const count = Math.min(n - 2, Math.floor(density) + (h(1) < density % 1 ? 1 : 0));
+      const used = new Set<number>();
+      for (let k = 0; k < count; k++) {
+        const lane = Math.floor(h(30 + k) * n);
+        if (used.has(lane)) continue;
+        used.add(lane);
+        block(lane, 40 + k);
+      }
+    }
+
+    const shardsPerBar = hz.shards ?? 1;
+    if (h(90) < shardsPerBar / 4) shard(Math.floor(h(91) * n));
+  }
+
+  private spikeLane(world: World, p: ScenePreset, lane: number, z: number, beat: number, rnd: number) {
+    const radius = laneSpacing(p) * 0.42;
+    if (isTube(p)) this.spikeTube(world, p, laneAngle(p, lane), z, beat, 'lane', rnd, radius);
+    else this.spikeFlat(world, p, laneOffset(p, lane).x, z, beat, 'tall', radius, rnd);
   }
 
   /** a spike on a floor or ceiling; "tall" reaches past the whole flight corridor, "low" can be skimmed over */
@@ -300,8 +440,11 @@ export class Hazards {
     this.addSpike(base, dir, radius, height, beat, rnd, p);
   }
 
-  /** a spike from a tunnel wall; "cross" reaches just past the centre line, "low" stops short of it */
-  private spikeTube(world: World, p: ScenePreset, angle: number, z: number, beat: number, kind: 'cross' | 'low', rnd: number) {
+  /**
+   * a spike from a tunnel wall: "cross" reaches just past the centre line, "low" stops short of it,
+   * "lane" reaches just past the lane ring the glider rides on
+   */
+  private spikeTube(world: World, p: ScenePreset, angle: number, z: number, beat: number, kind: 'cross' | 'low' | 'lane', rnd: number, radius?: number) {
     const layer: TerrainLayer | undefined = world.terrain.find((l) => l.kind === 'tube');
     if (!layer) return;
     const base = new THREE.Vector3();
@@ -309,9 +452,10 @@ export class Hazards {
     layer.surfacePoint(angle, z, base, dir);
     world.pathPoint(z, this.path);
     const dist = Math.hypot(base.x - this.path.x, base.y - this.path.y);
-    const height = kind === 'cross' ? dist + 1.2 : dist - p.play.halfWidth * (0.35 + rnd * 0.3);
+    const height =
+      kind === 'cross' ? dist + 1.2 : kind === 'lane' ? dist - p.play.halfWidth * 0.9 + 2.2 : dist - p.play.halfWidth * (0.35 + rnd * 0.3);
     const hz = p.hazards!;
-    this.addSpike(base, dir, lerp(hz.radius[0], hz.radius[1], rnd), Math.max(2, height), beat, rnd, p);
+    this.addSpike(base, dir, radius ?? lerp(hz.radius[0], hz.radius[1], rnd), Math.max(2, height), beat, rnd, p);
   }
 
   private addSpike(base: THREE.Vector3, dir: THREE.Vector3, radius: number, height: number, beat: number, rnd: number, p: ScenePreset) {
@@ -329,6 +473,9 @@ export class Hazards {
       rise: 0,
       grazedAt: 0,
       hitAt: 0,
+      shatteredAt: 0,
+      obsidian: this.obsidianEnabled && hash2(beat, Math.floor(rnd * 9973), SEED + 5) < (p.hazards!.obsidian ?? 0.25),
+      locked: false,
       color: new THREE.Color(p.hazards!.color).multiplyScalar(0.9 + rnd * 0.2),
     });
     if (this.spikes.length > MAX_SPIKES) this.spikes.shift();
@@ -342,12 +489,14 @@ export class Hazards {
       pos.x += (this.path.x - pos.x) * 0.3;
       pos.y += (this.path.y - pos.y) * 0.3;
     }
-    this.shards.push({ pos, takenAt: 0 });
+    this.shards.push({ pos, takenAt: 0, magnet: false });
     if (this.shards.length > MAX_SHARDS) this.shards.shift();
   }
 }
 
 const WHITE = new THREE.Color(1, 1, 1);
+/** obsidian spikes telegraph with a red ring: dodge, don't shoot */
+const OBSIDIAN_RING = new THREE.Color('#ff4d6d');
 
 function easeOutBack(x: number) {
   const c1 = 1.70158;

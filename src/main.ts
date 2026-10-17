@@ -7,7 +7,7 @@ import { Hud } from './ui/hud';
 import { GameHud } from './ui/gamehud';
 import { Game } from './game/game';
 import { Input } from './game/input';
-const audioUrl = `${import.meta.env.BASE_URL}audio/hyperloops-ref.ogg`;
+
 
 async function boot() {
   const renderer = new THREE.WebGPURenderer({ antialias: true });
@@ -22,7 +22,7 @@ async function boot() {
   hud.root.prepend(renderer.domElement);
 
   const world = new World(renderer);
-  const clock = new BeatClock(audioUrl);
+  const clock = new BeatClock(import.meta.env.BASE_URL);
   const gameHud = new GameHud(hud.root);
   const input = new Input(renderer.domElement);
   const game = new Game(world, clock, gameHud, input);
@@ -47,7 +47,9 @@ async function boot() {
   hud.onStart(() => {
     if (frozen !== undefined) return;
     void clock.start();
+    world.clarity = 1;
     game.start();
+    gameHud.showFlux(game.firing);
     gameHud.show(true);
   });
 
@@ -60,6 +62,8 @@ async function boot() {
     else if (e.code === 'KeyV') hud.cycleRef();
     else if (e.code === 'KeyH') hud.toggle();
     else if (e.code === 'KeyM') clock.setMuted(!clock.isMuted);
+    else if (e.code === 'KeyL') game.setLaneMode(!game.laneMode, clock.time);
+    else if (e.code === 'KeyF') game.setFiring(!game.firing);
     else if (e.code === 'KeyI') {
       game.god = !game.god;
       modeText();

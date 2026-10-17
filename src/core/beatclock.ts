@@ -1,4 +1,5 @@
 import { locate, SECTION_LEN } from './timeline';
+import { TRACKS, type TrackId } from './tracks';
 
 /**
  * Master clock + music engine.
@@ -35,7 +36,7 @@ export interface BeatInfo {
 
 export class BeatClock {
   private ctx: AudioContext | null = null;
-  private buffer: AudioBuffer | null = null;
+  private buffers: Partial<Record<TrackId, AudioBuffer>> = {};
   private loading: Promise<void> | null = null;
   private filter: BiquadFilterNode | null = null;
   private analyser: AnalyserNode | null = null;
@@ -53,7 +54,8 @@ export class BeatClock {
   /** smoothed overall energy 0..1 */
   energy = 0;
 
-  constructor(private readonly url: string) {}
+  /** @param base URL prefix for the track files */
+  constructor(private readonly base: string) {}
 
   /** Must be called from a user gesture. */
   async start() {
@@ -72,10 +74,15 @@ export class BeatClock {
       this.analyser.connect(this.master);
       this.master.connect(this.ctx.destination);
       this.freq = new Uint8Array(this.analyser.frequencyBinCount);
-      this.loading = fetch(this.url)
-        .then((r) => r.arrayBuffer())
-        .then((b) => this.ctx!.decodeAudioData(b))
-        .then((buf) => void (this.buffer = buf));
+      const ctx = this.ctx;
+      this.loading = Promise.all(
+        (Object.keys(TRACKS) as TrackId[]).map((id) =>
+          fetch(this.base + TRACKS[id].url)
+            .then((r) => r.arrayBuffer())
+            .then((b) => ctx.decodeAudioData(b))
+            .then((buf) => void (this.buffers[id] = buf)),
+        ),
+      ).then(() => undefined);
     }
     await this.ctx.resume();
     await this.loading;
@@ -99,6 +106,13 @@ export class BeatClock {
 
   get isMuted() {
     return this.muted;
+  }
+
+  /** how far behind the clock the sound actually reaches the speakers (for judging timing) */
+  get latency(): number {
+    const ctx = this.ctx;
+    if (!ctx) return 0;
+    return (ctx.outputLatency || 0) + (ctx.baseLatency || 0);
   }
 
   get playing() {
@@ -155,7 +169,7 @@ export class BeatClock {
   }
 
   private play() {
-    if (!this.ctx || !this.buffer) return;
+    if (!this.ctx || !this.buffers.ref) return;
     this.paused = false;
     this.origin = this.ctx.currentTime - this.pausedAt;
     this.scheduledUntil = this.pausedAt;
@@ -165,16 +179,16 @@ export class BeatClock {
   /** queue sections up to LOOKAHEAD seconds ahead */
   private schedule() {
     const ctx = this.ctx;
-    const buf = this.buffer;
     const out = this.filter;
-    if (!ctx || !buf || !out) return;
+    if (!ctx || !out) return;
     const now = ctx.currentTime - this.origin;
     while (this.scheduledUntil < now + LOOKAHEAD) {
       const from = this.scheduledUntil;
       const place = locate(from);
       const to = from + (SECTION_LEN - (place.sceneTime % SECTION_LEN));
       let when = this.origin + from;
-      let offset = place.songTime;
+      let offset = place.trackTime;
+      const buf = this.buffers[place.track] ?? this.buffers.ref!;
       let dur = to - from;
       if (when < ctx.currentTime) {
         const late = ctx.currentTime - when;

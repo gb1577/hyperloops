@@ -8,6 +8,7 @@ import { TerrainLayer, tubeCenter } from './terrain';
 import { Sky } from './sky';
 import { LineFX } from './lines';
 import { Post } from './post';
+import { EndGlow } from './endglow';
 
 /** Distance travelled at time t: speed changes per scene, but position stays a pure function of time (seek-safe). */
 export function zAt(t: number): number {
@@ -32,8 +33,10 @@ export interface Focus {
   x: number;
   y: number;
   bank: number;
+  /** tunnel lanes: roll the whole view so the glider's lane is at the bottom */
+  spin: number;
 }
-const NO_FOCUS: Focus = { x: 0, y: 0, bank: 0 };
+const NO_FOCUS: Focus = { x: 0, y: 0, bank: 0, spin: 0 };
 
 export class World {
   readonly scene = new THREE.Scene();
@@ -41,6 +44,7 @@ export class World {
   readonly post: Post;
   private readonly sky = new Sky();
   private readonly lines = new LineFX();
+  private readonly endGlow = new EndGlow();
   private readonly sun = new THREE.DirectionalLight();
   private readonly hemi = new THREE.HemisphereLight();
   private readonly fogExp = new THREE.FogExp2('#ffffff', 0.01);
@@ -48,11 +52,16 @@ export class World {
   private layers: TerrainLayer[] = [];
   private current = -1;
   private punchFlash = 0;
+  /**
+   * 0 = the reference-video look (look-dev, title); 1 = gameplay: the centre glow, bloom and fog are
+   * pulled back so spikes stay readable.
+   */
+  clarity = 0;
   preset: ScenePreset = PRESETS[0];
 
   constructor(renderer: THREE.WebGPURenderer) {
     this.scene.fog = this.fogExp;
-    this.scene.add(this.sky.mesh, this.sun, this.sun.target, this.hemi, this.lines.group);
+    this.scene.add(this.sky.mesh, this.sun, this.sun.target, this.hemi, this.lines.group, this.endGlow.mesh);
     this.post = new Post(renderer, this.scene, this.camera);
     this.setScene(0);
   }
@@ -145,13 +154,14 @@ export class World {
     const look = 16;
     const pc = this.pathPoint(z, this.tmpA);
     const pg = this.pathPoint(z - GLIDER_AHEAD - look, this.tmpB);
-    this.camera.position.set(pc.x + focus.x * 0.7 + swayX, pc.y + focus.y * 0.7 + lift + swayY, z);
-    this.camera.up.set(0, 1, 0);
-    this.camera.lookAt(
-      pg.x + focus.x * 0.85,
-      pg.y + focus.y * 0.85 + lift * 0.3 + Math.tan(c.pitch) * (GLIDER_AHEAD + look),
-      pg.z,
-    );
+    // "up" for the camera: world up, or toward the tunnel centre from the glider's lane
+    const ux = -Math.sin(focus.spin);
+    const uy = Math.cos(focus.spin);
+    const follow = focus.spin ? 0.6 : 0.7;
+    const rise = lift * 0.3 + Math.tan(c.pitch) * (GLIDER_AHEAD + look);
+    this.camera.position.set(pc.x + focus.x * follow + swayX + ux * lift, pc.y + focus.y * follow + swayY + uy * lift, z);
+    this.camera.up.set(ux, uy, 0);
+    this.camera.lookAt(pg.x + focus.x * 0.85 + ux * rise, pg.y + focus.y * 0.85 + uy * rise, pg.z);
     const roll = c.roll + c.rollSwing * Math.sin((info.bar / c.rollPeriodBars) * Math.PI * 2);
     this.camera.rotateZ(roll + focus.bank * 0.35);
     this.camera.updateMatrixWorld();
@@ -161,6 +171,11 @@ export class World {
       const far = tubeCenter(lead, z - 300);
       this.sky.sunDir.value.set(far.x - this.camera.position.x, far.y - this.camera.position.y, -300).normalize();
     }
+
+    if (p.endGlow) {
+      const g = p.endGlow;
+      this.endGlow.place(this.pathPoint(z - g.distance, this.tmpB), g.radius, g.intensity, this.camera);
+    } else this.endGlow.hide();
 
     // sky + lights follow the camera
     this.sky.mesh.position.copy(this.camera.position);
@@ -172,12 +187,15 @@ export class World {
 
     // music reactivity
     const pump = Math.max(info.kick * 0.7, bass);
-    this.post.setPump(pump, p.post.pump);
-    this.sky.sunIntensity.value = p.sky.sunIntensity * (1 + pump * p.post.pump * 0.6);
+    const k = this.clarity;
+    this.post.setPump(pump, p.post.pump * (1 - 0.6 * k), 1 - 0.45 * k);
+    this.sky.sunIntensity.value = p.sky.sunIntensity * (1 - 0.4 * k) * (1 + pump * p.post.pump * 0.6 * (1 - 0.6 * k));
+    if (this.scene.fog === this.fogExp) this.fogExp.density = p.fog.density * (1 - 0.4 * k);
+    else if (p.fog.far !== undefined) this.fogLinear.far = p.fog.far * (1 + 0.4 * k);
 
     // transitions: white-out ramps into scenes that start with a flash, and a short punch after every cut
     const next = PRESETS[(idx + 1) % PRESETS.length];
-    let flash = Math.exp(-info.sceneTime * 7) * (p.transition === 'flash' ? 1 : 0.35);
+    let flash = Math.exp(-info.sceneTime * 7) * (p.transition === 'flash' ? 1 : 0.35) * (1 - 0.5 * k);
     const toEnd = info.sceneLen - info.sceneTime;
     if (next.transition === 'flash' && toEnd < 1.5) flash = Math.max(flash, Math.pow(1 - toEnd / 1.5, 2));
     this.punchFlash *= 0.85;
@@ -187,7 +205,7 @@ export class World {
     this.post.vignette.value = p.post.vignette + info.sceneProgress * 0.35 * fadeOut;
     // only the last scene fades to black (the loop seam)
     const last = idx === PRESETS.length - 1;
-    this.post.fade.value = last ? Math.pow(Math.max(0, (info.sceneProgress - 0.55) / 0.45), 2) * fadeOut : 0;
+    this.post.fade.value = last ? Math.pow(Math.max(0, (info.sceneTime - (info.sceneLen - 3)) / 3), 2) * fadeOut : 0;
   }
 
   resize(w: number, h: number) {

@@ -40,7 +40,15 @@ Genre: rhythm graze-runner (*Race the Sun* × *Thumper* × *Rez*).
   white-out flash (exactly the video's transitions) → next scene. Missing it is legal but costs the
   scene bonus.
 
-## 4. The firing mechanic (your idea) — yes, with rules
+## Playtest decisions (Oct 2026)
+
+- **Controls:** free 2D flight, made snappy. A lane-snapping prototype was tried and lost (still behind the dev key L).
+- **Core stays pure:** dodge, graze, collect shards. Lock-on firing (section 4) was built and felt redundant,
+  so it is off (dev key F). Overdrive was built and dropped.
+- **Levels:** 32 bars each (16 for Wire Cave / Wire Night). Music is a per-level playlist of 8-bar sections
+  from three tracks on one 160 BPM grid. Dying restarts the level.
+
+## 4. The firing mechanic (your idea) — built, then shelved
 
 Shooting is great: it gives the player agency against the wall of spikes and it is the most
 satisfying "juice" moment. The risk is that free unlimited shooting kills the graze/risk loop

@@ -45,6 +45,45 @@ export class Sfx {
     }
   }
 
+  /** lock-on tick, rising with each lock */
+  lock(n: number) {
+    this.tone(1320 * Math.pow(2, (n * 3) / 12), 'square', 0.05, 0.06);
+  }
+
+  /** out of flux */
+  dry() {
+    this.tone(180, 'sawtooth', 0.08, 0.06);
+  }
+
+  /** the volley: a chord in key on perfect, a single note on good, a dull knock off-beat */
+  volley(judgement: 'perfect' | 'good' | 'off', count: number) {
+    if (judgement === 'perfect') {
+      for (const semis of [0, 7, 12, 15].slice(0, Math.max(2, count))) this.tone(440 * Math.pow(2, semis / 12), 'triangle', 0.5, 0.14);
+      this.noiseBurst(6000, 'highpass', 0.35, 0.12);
+    } else if (judgement === 'good') {
+      this.tone(440, 'triangle', 0.3, 0.14);
+      this.noiseBurst(5000, 'highpass', 0.25, 0.1);
+    } else {
+      this.tone(110, 'sine', 0.2, 0.25);
+    }
+    this.noiseBurst(2400, 'bandpass', 0.22, 0.18);
+  }
+
+  private tone(freq: number, type: OscillatorType, dur: number, vol: number) {
+    const ctx = this.ready();
+    if (!ctx || !this.out) return;
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(this.out);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  }
+
   /** graze: a short bright swish */
   graze() {
     this.noiseBurst(5500, 'highpass', 0.13, 0.12);

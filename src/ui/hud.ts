@@ -90,6 +90,6 @@ export class Hud {
       <div class="row"><span>bar in scene</span><span>${barInScene + 1}/${barsInScene}</span></div>
       <div class="row"><span>fps · ${this.hud.dataset.backend}</span><span>${this.fps}</span></div>
       <div class="row"><span>ref video</span><span>${this.refMode}</span></div>
-      <div class="keys">esc pause · M mute · [ ] scene · 1-9,0 jump · I invincible · V ref video · H hud</div>`;
+      <div class="keys">esc pause · M mute · L lanes/free · F firing · [ ] scene · 1-9,0 jump · I invincible · V ref video · H hud</div>`;
   }
 }

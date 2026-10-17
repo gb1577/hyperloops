@@ -3,3 +3,6 @@ dist
 
 # large source video, kept on disk only
 ref/
+
+# lossless masters, not used by the game (built from the MP3s)
+music/wave/

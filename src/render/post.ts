@@ -57,8 +57,8 @@ export class Post {
   }
 
   /** pump 0..1 from the kick/bass */
-  setPump(pump: number, amount: number) {
-    this.bloomNode.strength.value = this.baseBloom * (1 + pump * amount);
+  setPump(pump: number, amount: number, scale = 1) {
+    this.bloomNode.strength.value = this.baseBloom * scale * (1 + pump * amount);
   }
 
   render() {
