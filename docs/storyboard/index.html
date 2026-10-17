@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hyperloops Storyboard</title>
+<style>
+  :root{
+    --bg:#0b0b10; --panel:#14141c; --line:#2a2a36; --text:#e8e8f0; --muted:#9a9ab0;
+    --hazard:#ff4d6d; --reward:#ffe066; --player:#bff6ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+  header{padding:40px 24px 8px;max-width:1240px;margin:auto}
+  h1{font-size:44px;letter-spacing:.35em;font-weight:200;margin:0}
+  h1 b{font-weight:600}
+  .sub{color:var(--muted);margin:6px 0 0}
+  main{max-width:1240px;margin:auto;padding:0 24px 80px}
+  h2{font-weight:300;letter-spacing:.2em;text-transform:uppercase;font-size:14px;color:var(--muted);margin:48px 0 14px;border-bottom:1px solid var(--line);padding-bottom:8px}
+  .timeline{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;align-items:end;height:120px}
+  .timeline div{border-radius:3px 3px 0 0;position:relative}
+  .timeline span{position:absolute;bottom:-40px;left:0;right:0;text-align:center;font-size:11px;color:var(--muted);line-height:1.2}
+  .tl-wrap{padding-bottom:56px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));gap:22px}
+  @media (max-width:600px){.grid{grid-template-columns:1fr} h1{font-size:28px}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .frame{position:relative;aspect-ratio:16/9;background:#000}
+  .frame img{width:100%;height:100%;object-fit:cover;display:block}
+  .frame svg{position:absolute;inset:0;width:100%;height:100%}
+  .cap{padding:12px 16px 16px}
+  .cap h3{margin:0 0 2px;font-size:16px;letter-spacing:.08em}
+  .cap .meta{font-size:12px;color:var(--muted);margin-bottom:8px}
+  .cap .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+  .cap ul{margin:0;padding-left:18px}
+  .cap li{margin:2px 0}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);margin-right:4px;color:var(--muted)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:13px}
+  .legend i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+  svg text{font-family:system-ui,Segoe UI,Roboto,sans-serif}
+</style>
+</head>
+<body>
+
+<!-- shared SVG defs: glider, reticle, glow, HUD pieces -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <symbol id="glider" viewBox="-40 -30 80 70" overflow="visible">
+      <path d="M-6,22 L-14,60 M6,22 L14,60 M0,14 L0,70" stroke="#bff6ff" stroke-width="2" opacity=".45"/>
+      <path d="M0,-22 L26,16 L0,6 L-26,16 Z" fill="#fff" stroke="#bff6ff" stroke-width="2" filter="url(#glow)"/>
+    </symbol>
+    <symbol id="reticle" viewBox="-30 -30 60 60" overflow="visible">
+      <circle r="18" fill="none" stroke="#ff4d6d" stroke-width="2.5"/>
+      <path d="M0,-28 V-20 M0,28 V20 M-28,0 H-20 M28,0 H20" stroke="#ff4d6d" stroke-width="2.5"/>
+    </symbol>
+    <symbol id="burst" viewBox="-40 -40 80 80" overflow="visible">
+      <g stroke="#ffe066" stroke-width="3" filter="url(#glow)">
+        <path d="M0,-10 L0,-34 M8,8 L26,26 M-8,8 L-26,26 M10,-4 L34,-12 M-10,-4 L-34,-12"/>
+      </g>
+      <polygon points="0,-8 7,5 -7,5" fill="#ffe066"/>
+    </symbol>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#fff"/>
+    </marker>
+    <marker id="arrR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ff4d6d"/>
+    </marker>
+    <marker id="arrY" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ffe066"/>
+    </marker>
+    <!-- HUD: score, combo, flux bar, beat dots, shield -->
+    <symbol id="hud" viewBox="0 0 960 540">
+      <rect x="18" y="16" width="190" height="52" rx="6" fill="#000" opacity=".45"/>
+      <text x="30" y="38" fill="#fff" font-size="13" letter-spacing="3" opacity=".8">SCORE</text>
+      <text x="30" y="60" fill="#fff" font-size="20" font-weight="600" letter-spacing="2">012,480</text>
+      <text x="150" y="60" fill="#ffe066" font-size="20" font-weight="700">×8</text>
+      <g transform="translate(330,500)">
+        <rect width="300" height="10" rx="5" fill="#000" opacity=".5"/>
+        <rect width="190" height="10" rx="5" fill="#bff6ff" filter="url(#glow)"/>
+        <text x="150" y="-8" fill="#fff" font-size="11" letter-spacing="4" text-anchor="middle" opacity=".85">FLUX</text>
+      </g>
+      <g transform="translate(400,24)" fill="#fff">
+        <circle cx="0" r="4"/><circle cx="20" r="4"/><circle cx="40" r="4"/><circle cx="60" r="4"/>
+        <circle cx="80" r="4"/><circle cx="100" r="4" opacity=".35"/><circle cx="120" r="4" opacity=".35"/><circle cx="140" r="4" opacity=".35"/>
+      </g>
+      <g transform="translate(900,500)" stroke="#bff6ff" stroke-width="2" fill="none">
+        <path d="M-60,-10 l10,-10 l10,10 l-10,10z"/><path d="M-30,-10 l10,-10 l10,10 l-10,10z"/><path d="M0,-10 l10,-10 l10,10 l-10,10z" opacity=".3"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<header>
+  <h1>HYPER<b>LOOPS</b></h1>
+  <p class="sub">Storyboard v0.1, rhythm graze-runner. Stills come from the 2016 reference video, and the overlays are mock-ups of the planned gameplay. See <code>docs/GAME_DESIGN.md</code> for the full plan.</p>
+</header>
+
+<main>
+  <h2>Loop structure: 10 scenes × 8 bars ≈ 2 min (bar height = music energy measured from the reference)</h2>
+  <div class="tl-wrap">
+  <div class="timeline">
+    <div style="height:42%;background:#c9a27e"><span>1<br>Sepia</span></div>
+    <div style="height:60%;background:#7fd1a0"><span>2<br>Jade</span></div>
+    <div style="height:82%;background:#8f7bd8"><span>3<br>Violet</span></div>
+    <div style="height:96%;background:#6fb3c4"><span>4<br>Ice ▲drop</span></div>
+    <div style="height:91%;background:#c8c8e0"><span>5<br>Scribble</span></div>
+    <div style="height:95%;background:#7b63d6"><span>6<br>Amethyst</span></div>
+    <div style="height:95%;background:#e46a9a"><span>7<br>Rose</span></div>
+    <div style="height:100%;background:#f4a43a"><span>8<br>Solar ▲peak</span></div>
+    <div style="height:50%;background:#f3b38f"><span>9<br>Peach</span></div>
+    <div style="height:26%;background:#3fb8a6"><span>10<br>Wire</span></div>
+  </div>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--player)"></i>player / glider</span>
+    <span><i style="background:var(--hazard)"></i>hazard / lock-on</span>
+    <span><i style="background:var(--reward)"></i>reward / graze / shatter</span>
+  </div>
+
+  <h2>Scenes</h2>
+  <div class="grid">
+
+    <!-- 1 -->
+    <section class="panel">
+      <div class="frame"><img src="frames/s01.jpg" alt="Sepia Peaks">
+        <svg viewBox="0 0 960 540">
+          <use href="#hud"/>
+          <text x="942" y="40" fill="#fff" font-size="13" letter-spacing="3" text-anchor="end">1/10 · SEPIA PEAKS</text>
+          <use href="#glider" x="420" y="330" width="80" height="70"/>
+          <path d="M405,370 C340,372 300,360 270,350" stroke="#fff" stroke-dasharray="6 6" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+          <path d="M515,370 C580,372 620,360 650,350" stroke="#fff" stroke-dasharray="6 6" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+          <g transform="translate(560,330)"><path d="M-30,10 L-60,0 M-28,18 L-62,22 M-30,2 L-50,-16" stroke="#ffe066" stroke-width="3" filter="url(#glow)"/></g>
+          <rect x="600" y="270" width="150" height="30" rx="15" fill="#000" opacity=".55"/>
+          <text x="675" y="291" fill="#ffe066" font-size="15" font-weight="700" text-anchor="middle">GRAZE +FLUX</text>
+          <rect x="300" y="110" width="360" height="34" rx="17" fill="#000" opacity=".45"/>
+          <text x="480" y="133" fill="#fff" font-size="15" text-anchor="middle" letter-spacing="2">FLY LOW. FLY CLOSE.</text>
+        </svg>
+      </div>
+      <div class="cap"><h3>1 · Sepia Peaks</h3>
+        <div class="meta"><span class="sw" style="background:#c9a27e"></span>0:00–0:12 · intro pad + kick · <span class="tag">tutorial</span></div>
+        <ul><li>The camera hugs the peaks exactly like the video. The player learns to steer and to graze.</li>
+        <li>Only dark obsidian peaks appear, so you dodge but can't shoot yet. Grazing lights a spark trail and fills the Flux bar.</li>
+        <li>The first hint text fades in on beat 1 of bar 2.</li></ul>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section class="panel">
+      <div class="frame"><img src="frames/s02.jpg" alt="Jade Spires">
+        <svg viewBox="0 0 960 540">
+          <use href="#hud"/>
+          <text x="942" y="40" fill="#fff" font-size="13" letter-spacing="3" text-anchor="end">2/10 · JADE SPIRES</text>
+          <line x1="0" y1="200" x2="960" y2="200" stroke="#ff4d6d" stroke-width="3" stroke-dasharray="14 8" opacity=".9"/>
+          <rect x="24" y="170" width="190" height="24" rx="12" fill="#000" opacity=".55"/>
+          <text x="119" y="187" fill="#ff4d6d" font-size="13" font-weight="700" text-anchor="middle">SCANLINE: DUCK UNDER</text>
+          <path d="M700,470 L700,330" stroke="#ffe066" stroke-width="3" marker-end="url(#arrY)"/>
+          <rect x="712" y="380" width="200" height="26" rx="13" fill="#000" opacity=".55"/>
+          <text x="812" y="398" fill="#ffe066" font-size="13" font-weight="700" text-anchor="middle">ERUPTS ON THE BEAT</text>
+          <use href="#reticle" x="250" y="300" width="60" height="60"/>
+          <use href="#reticle" x="560" y="320" width="60" height="60"/>
+          <use href="#glider" x="440" y="370" width="80" height="70"/>
+          <path d="M470,380 L285,335 M490,380 L585,355" stroke="#ff4d6d" stroke-width="1.5" stroke-dasharray="4 4"/>
+        </svg>
+      </div>
+      <div class="cap"><h3>2 · Jade Spires</h3>
+        <div class="meta"><span class="sw" style="background:#7fd1a0"></span>0:12–0:24 · hats and bass enter · <span class="tag">introduces firing</span></div>
+        <ul><li>Spikes shoot up out of the ground on the beat. You can see them start to rise half a beat before they reach full height.</li>
+        <li>The scene's glitch scanlines become laser walls you have to fly under or over. Shots can't break them.</li>
+        <li>This is the first scene with shootable green crystal spikes, so the Lock-on → Pulse tutorial runs here.</li></ul>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section class="panel">
+      <div class="frame"><img src="frames/s03.jpg" alt="Violet Tunnel">
+        <svg viewBox="0 0 960 540">
+          <use href="#hud"/>
+          <text x="942" y="40" fill="#fff" font-size="13" letter-spacing="3" text-anchor="end">3/10 · VIOLET TUNNEL</text>
+          <ellipse cx="480" cy="270" rx="330" ry="200" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="8 8" opacity=".7"/>
+          <path d="M260,420 A330,200 0 0,1 170,240" stroke="#fff" stroke-width="3" fill="none" marker-end="url(#arr)"/>
+          <path d="M700,420 A330,200 0 0,0 790,240" stroke="#fff" stroke-width="3" fill="none" marker-end="url(#arr)"/>
+          <use href="#glider" x="440" y="410" width="80" height="70"/>
+          <line x1="60" y1="120" x2="900" y2="330" stroke="#ff4d6d" stroke-width="4" filter="url(#glow)"/>
+          <rect x="600" y="340" width="180" height="26" rx="13" fill="#000" opacity=".55"/>
+          <text x="690" y="358" fill="#ff4d6d" font-size="13" font-weight="700" text-anchor="middle">SWEEPING LASER</text>
+          <rect x="350" y="96" width="260" height="30" rx="15" fill="#000" opacity=".5"/>
+          <text x="480" y="117" fill="#fff" font-size="14" text-anchor="middle" letter-spacing="2">TUNNEL MODE: ROTATE</text>
+        </svg>
+      </div>
+      <div class="cap"><h3>3 · Violet Tunnel</h3>
+        <div class="meta"><span class="sw" style="background:#8f7bd8"></span>0:24–0:36 · build, risers · <span class="tag">tunnel mode</span></div>
+        <ul><li>The world wraps into a tube. Left and right now spin you around the wall, Thumper-style.</li>
+        <li>The video's laser streaks sweep around the tube on half-notes, and you dodge them by rotating.</li>
+        <li>The exit glare grows with the risers until a white-out leads into the drop.</li></ul>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section class="panel">
+      <div class="frame"><img src="frames/s04.jpg" alt="Ice Shards">
+        <svg viewBox="0 0 960 540">
+          <use href="#hud"/>
+          <text x="942" y="40" fill="#fff" font-size="13" letter-spacing="3" text-anchor="end">4/10 · ICE SHARDS</text>
+          <use href="#glider" x="440" y="390" width="80" height="70"/>
+          <g stroke="#ff4d6d" stroke-width="1.5" stroke-dasharray="4 4">
+            <path d="M480,395 L210,190"/><path d="M480,395 L380,140"/><path d="M480,395 L650,170"/><path d="M480,395 L780,260"/>
+          </g>
+          <use href="#reticle" x="180" y="160" width="60" height="60"/>
+          <use href="#reticle" x="350" y="110" width="60" height="60"/>
+          <use href="#burst" x="610" y="130" width="80" height="80"/>
+          <use href="#burst" x="740" y="220" width="80" height="80"/>
+          <rect x="560" y="70" width="200" height="40" rx="20" fill="#000" opacity=".55"/>
+          <text x="660" y="97" fill="#ffe066" font-size="20" font-weight="800" text-anchor="middle" letter-spacing="2">PERFECT ×2</text>
+          <rect x="40" y="250" width="150" height="26" rx="13" fill="#000" opacity=".55"/>
+          <text x="115" y="268" fill="#ff4d6d" font-size="13" font-weight="700" text-anchor="middle">LOCK 4 · RELEASE</text>
+        </svg>
+      </div>
+      <div class="cap"><h3>4 · Ice Shards: THE DROP</h3>
+        <div class="meta"><span class="sw" style="background:#6fb3c4"></span>0:36–0:48 · full mix · <span class="tag">lock-on showcase</span></div>
+        <ul><li>A dense field of crystal shards, where you hold to lock onto up to 4 and release on the beat to shatter them.</li>
+        <li>Each perfect release plays a glassy stinger in key, so a good player is effectively playing the lead melody.</li>
+        <li>The white beams from the video become fixed laser bars you have to thread between.</li></ul>
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section class="panel">
+      <div class="frame"><img src="frames/s05.jpg" alt="Scribble Void">
+        <svg viewBox="0 0 960 540">
+          <use href="#hud"/>
+          <text x="942" y="40" fill="#fff" font-size="13" letter-spacing="3" text-anchor="end">5/10 · SCRIBBLE VOID</text>
+          <path d="M480,440 C420,380 560,320 500,260 C450,210 560,180 600,150" stroke="#ffe066" stroke-width="2" stroke-dasharray="2 10" stroke-linecap="round" fill="none"/>
+          <g fill="#ffe066" filter="url(#glow)">
+            <circle cx="452" cy="380" r="6"/><circle cx="520" cy="320" r="6"/><circle cx="490" cy="250" r="6"/><circle cx="540" cy="195" r="5"/><circle cx="598" cy="152" r="4"/>
+          </g>
+          <use href="#glider" x="440" y="420" width="80" height="70"/>
+          <rect x="590" y="300" width="230" height="28" rx="14" fill="#000" opacity=".55"/>
+          <text x="705" y="319" fill="#ffe066" font-size="13" font-weight="700" text-anchor="middle">CHASE MOTES · +SHIELD</text>
+        </svg>
+      </div>
+      <div class="cap"><h3>5 · Scribble Void (breather)</h3>
+        <div class="meta"><span class="sw" style="background:#c8c8e0"></span>0:48–1:00 · breakdown, filtered · <span class="tag">bonus</span></div>
+        <ul><li>There's no terrain and no hazards here. The hand-drawn lines in the video come together to form a path of light motes.</li>
+        <li>Collecting every mote restores one shield crack. Players need the break after the drop.</li>
+        <li>An idea for later: in Endless mode this could be a "draw your line" mini-mode.</li></ul>
+      </div>
+    </section>
+
+    <!-- 6 -->
+    <section class="panel">
+      <div class="frame"><img src="frames/s06.jpg" alt="Amethyst Ridge">
+        <svg viewBox="0 0 960 540">
+          <use href="#hud"/>
+          <text x="942" y="40" fill="#fff" font-size="13" letter-spacing="3" text-anchor="end">6/10 · AMETHYST RIDGE</text>
+          <path d="M150,170 A400,400 0 0,1 810,130" stroke="#fff" stroke-width="3" fill="none" marker-end="url(#arr)" marker-start="url(#arr)"/>
+          <rect x="370" y="96" width="220" height="28" rx="14" fill="#000" opacity=".5"/>
+          <text x="480" y="115" fill="#fff" font-size="13" text-anchor="middle" letter-spacing="2">HORIZON ROLLS ON THE BAR</text>
+          <path d="M120,440 C260,380 360,460 480,400 S700,330 860,380" stroke="#bff6ff" stroke-width="2.5" stroke-dasharray="8 6" fill="none"/>
+          <use href="#glider" x="440" y="350" width="80" height="70"/>
+          <use href="#burst" x="660" y="310" width="70" height="70"/>
+          <rect x="690" y="410" width="180" height="26" rx="13" fill="#000" opacity=".55"/>
+          <text x="780" y="428" fill="#bff6ff" font-size="13" font-weight="700" text-anchor="middle">RIDE THE SLOPES</text>
+        </svg>
+      </div>
+      <div class="cap"><h3>6 · Amethyst Ridge</h3>
+        <div class="meta"><span class="sw" style="background:#7b63d6"></span>1:00–1:12 · groove returns · <span class="tag">rolling world</span></div>
+        <ul><li>The camera banks like it does in the video. The horizon rolls every bar, so you constantly re-orient.</li>
+        <li>The terrain moves in big waves, and staying on a wave's surface gives a "surf" graze bonus.</li></ul>
+      </div>
+    </section>
+
+    <!-- 7 -->
+    <section class="panel">
+      <div class="frame"><img src="frames/s07.jpg" alt="Rose Canyon">
+        <svg viewBox="0 0 960 540">
+          <use href="#hud"/>
+          <text x="942" y="40" fill="#fff" font-size="13" letter-spacing="3" text-anchor="end">7/10 · ROSE CANYON</text>
+          <g stroke="#ff4d6d" stroke-width="3">
+            <path d="M330,90 L330,170" marker-end="url(#arrR)"/><path d="M620,80 L620,160" marker-end="url(#arrR)"/>
+          </g>
+          <path d="M70,140 L70,400" stroke="#fff" stroke-width="2"/>
+          <path d="M60,140 H80 M60,400 H80" stroke="#fff" stroke-width="2"/>
+          <text x="92" y="276" fill="#fff" font-size="13" letter-spacing="2">SQUEEZE</text>
+          <rect x="650" y="150" width="210" height="26" rx="13" fill="#000" opacity=".55"/>
+          <text x="755" y="168" fill="#ff4d6d" font-size="13" font-weight="700" text-anchor="middle">STALACTITES DROP ON 2 & 4</text>
+          <use href="#glider" x="440" y="250" width="80" height="70"/>
+        </svg>
+      </div>
+      <div class="cap"><h3>7 · Rose Canyon</h3>
+        <div class="meta"><span class="sw" style="background:#e46a9a"></span>1:12–1:24 · second build · <span class="tag">floor + ceiling</span></div>
+        <ul><li>The terrain is above and below you, just like the pink sandwich shot in the video, so altitude control matters.</li>
+        <li>Spikes drop from the ceiling on the backbeat. The gap narrows as the build rises.</li></ul>
+      </div>
+    </section>
+
+    <!-- 8 -->
+    <section class="panel">
+      <div class="frame"><img src="frames/s08.jpg" alt="Solar Shear">
+        <svg viewBox="0 0 960 540">
+          <use href="#hud"/>
+          <text x="942" y="40" fill="#fff" font-size="13" letter-spacing="3" text-anchor="end">8/10 · SOLAR SHEAR</text>
+          <g stroke="#ff4d6d" stroke-width="3">
+            <path d="M40,180 L300,180" marker-end="url(#arrR)"/><path d="M920,260 L660,260" marker-end="url(#arrR)"/><path d="M40,350 L280,350" marker-end="url(#arrR)"/>
+          </g>
+          <rect x="400" y="290" width="160" height="110" rx="10" fill="none" stroke="#ffe066" stroke-width="2.5" stroke-dasharray="8 6"/>
+          <text x="480" y="420" fill="#ffe066" font-size="13" font-weight="700" text-anchor="middle">THREAD THE GAP</text>
+          <use href="#glider" x="440" y="300" width="80" height="70"/>
+          <rect x="340" y="90" width="280" height="34" rx="17" fill="#000" opacity=".5"/>
+          <text x="480" y="113" fill="#fff" font-size="15" font-weight="700" text-anchor="middle" letter-spacing="3">TOP SPEED · PEAK</text>
+        </svg>
+      </div>
+      <div class="cap"><h3>8 · Solar Shear: SECOND DROP</h3>
+        <div class="meta"><span class="sw" style="background:#f4a43a"></span>1:24–1:36 · peak energy · <span class="tag">cross-traffic</span></div>
+        <ul><li>The video's sideways-stretched shards become hazards flying across your path.</li>
+        <li>This is the fastest scene. Overdrive is most likely to fire here, the moment players will want to share.</li></ul>
+      </div>
+    </section>
+
+    <!-- 9 -->
+    <section class="panel">
+      <div class="frame"><img src="frames/s09.jpg" alt="Peach Dusk">
+        <svg viewBox="0 0 960 540">
+          <use href="#hud"/>
+          <text x="942" y="40" fill="#fff" font-size="13" letter-spacing="3" text-anchor="end">9/10 · PEACH DUSK</text>
+          <ellipse cx="480" cy="230" rx="120" ry="120" fill="none" stroke="#fff" stroke-width="6" filter="url(#glow)"/>
+          <ellipse cx="480" cy="230" rx="90" ry="90" fill="none" stroke="#ffe066" stroke-width="2" stroke-dasharray="4 8"/>
+          <text x="480" y="236" fill="#fff" font-size="22" font-weight="800" text-anchor="middle">×4.2</text>
+          <rect x="370" y="372" width="220" height="28" rx="14" fill="#000" opacity=".5"/>
+          <text x="480" y="391" fill="#ffe066" font-size="13" font-weight="700" text-anchor="middle">CASH-IN GATE</text>
+          <use href="#glider" x="440" y="420" width="80" height="70"/>
+        </svg>
+      </div>
+      <div class="cap"><h3>9 · Peach Dusk</h3>
+        <div class="meta"><span class="sw" style="background:#f3b38f"></span>1:36–1:48 · outro melody · <span class="tag">cool-down</span></div>
+        <ul><li>The sun sets and the vignette closes in. There are very few hazards.</li>
+        <li>Your banked multiplier is shown on the final gate, and flying through it adds the bonus to your score.</li></ul>
+      </div>
+    </section>
+
+    <!-- 10 -->
+    <section class="panel">
+      <div class="frame"><img src="frames/s10.jpg" alt="Wire Night">
+        <svg viewBox="0 0 960 540">
+          <rect x="300" y="70" width="360" height="250" rx="12" fill="#000" opacity=".6" stroke="#3fb8a6"/>
+          <text x="480" y="108" fill="#3fb8a6" font-size="13" letter-spacing="5" text-anchor="middle">LOOP 1 COMPLETE</text>
+          <text x="480" y="152" fill="#fff" font-size="34" font-weight="700" text-anchor="middle" letter-spacing="2">48,920</text>
+          <text x="330" y="190" fill="#9a9ab0" font-size="13">Perfect pulses</text><text x="630" y="190" fill="#fff" font-size="13" text-anchor="end">37 / 41</text>
+          <text x="330" y="212" fill="#9a9ab0" font-size="13">Grazes</text><text x="630" y="212" fill="#fff" font-size="13" text-anchor="end">212</text>
+          <text x="330" y="234" fill="#9a9ab0" font-size="13">Stars</text><text x="630" y="234" fill="#ffe066" font-size="13" text-anchor="end">★★★★★★★☆☆☆…</text>
+          <text x="480" y="270" fill="#ffe066" font-size="12" text-anchor="middle">142 pts to unlock ICE SHARDS remix</text>
+          <text x="480" y="302" fill="#fff" font-size="15" font-weight="700" text-anchor="middle" letter-spacing="4">LOOP 2 →  +12% SPEED</text>
+        </svg>
+      </div>
+      <div class="cap"><h3>10 · Wire Night</h3>
+        <div class="meta"><span class="sw" style="background:#3fb8a6"></span>1:48–2:00 · fade / loop seam · <span class="tag">results</span></div>
+        <ul><li>The world turns into wireframe, which is how the game shows that the loop is resetting. Results appear while you keep flying.</li>
+        <li>The terrain then rebuilds from wireframe into solid peaks and Loop 2 starts with no menu in between. Dying anywhere returns you here with an instant restart.</li></ul>
+      </div>
+    </section>
+
+  </div>
+
+  <h2>Key moments</h2>
+  <div class="grid">
+
+    <section class="panel">
+      <div class="frame"><img src="frames/s11.jpg" alt="Hyperloop gate flash">
+        <svg viewBox="0 0 960 540">
+          <ellipse cx="480" cy="270" rx="200" ry="200" fill="none" stroke="#fff" stroke-width="10" filter="url(#glow)" opacity=".9"/>
+          <text x="480" y="470" fill="#14141c" font-size="18" font-weight="800" text-anchor="middle" letter-spacing="6">HYPERLOOP</text>
+        </svg>
+      </div>
+      <div class="cap"><h3>Hyperloop gate → white-out transition</h3>
+        <div class="meta">The last bar of every scene</div>
+        <ul><li>The ring forms at the vanishing point on bar 7. Fly through it on beat 1 of the next bar.</li>
+        <li>The screen goes to white as in the video (0:34–0:36), then the next scene's palette blooms in from the light.</li>
+        <li>Missing the gate still takes you to the next scene, but you lose the scene bonus and the flash is grey instead of white.</li></ul>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="frame" style="background:linear-gradient(#1a1630,#0b0b10)">
+        <svg viewBox="0 0 960 540">
+          <g font-size="13" fill="#fff" text-anchor="middle" letter-spacing="2">
+            <text x="160" y="60">1 · GRAZE</text><text x="480" y="60">2 · HOLD = LOCK</text><text x="800" y="60">3 · RELEASE ON BEAT</text>
+          </g>
+          <path d="M120,420 L160,250 L200,420 Z" fill="#555" stroke="#888"/>
+          <use href="#glider" x="180" y="290" width="70" height="60"/>
+          <path d="M190,300 l-20,-10 M188,312 l-24,0" stroke="#ffe066" stroke-width="3" filter="url(#glow)"/>
+          <rect x="90" y="460" width="140" height="8" rx="4" fill="#333"/><rect x="90" y="460" width="100" height="8" rx="4" fill="#bff6ff"/>
+          <text x="160" y="495" fill="#bff6ff" font-size="12" text-anchor="middle">Flux +</text>
+          <g fill="#7fd1a0" opacity=".85">
+            <path d="M400,330 L420,200 L440,330Z"/><path d="M470,330 L490,170 L510,330Z"/><path d="M540,330 L560,220 L580,330Z"/>
+          </g>
+          <use href="#reticle" x="390" y="180" width="60" height="60"/><use href="#reticle" x="460" y="150" width="60" height="60"/><use href="#reticle" x="530" y="200" width="60" height="60"/>
+          <use href="#glider" x="445" y="380" width="70" height="60"/>
+          <rect x="390" y="460" width="180" height="8" rx="4" fill="#333"/><rect x="390" y="460" width="70" height="8" rx="4" fill="#bff6ff"/>
+          <text x="480" y="495" fill="#bff6ff" font-size="12" text-anchor="middle">Flux spent per lock</text>
+          <use href="#burst" x="720" y="160" width="80" height="80"/><use href="#burst" x="790" y="130" width="80" height="80"/><use href="#burst" x="850" y="180" width="80" height="80"/>
+          <use href="#glider" x="765" y="380" width="70" height="60"/>
+          <g fill="#ffe066" filter="url(#glow)"><circle cx="760" cy="300" r="4"/><circle cx="800" cy="320" r="4"/><circle cx="840" cy="300" r="4"/></g>
+          <text x="800" y="290" fill="#ffe066" font-size="11" text-anchor="middle">shards → Flux</text>
+          <g transform="translate(700,470)">
+            <rect x="0" y="-8" width="200" height="2" fill="#555"/>
+            <circle cx="0" cy="-7" r="5" fill="#fff"/><circle cx="50" cy="-7" r="5" fill="#fff"/><circle cx="100" cy="-7" r="7" fill="#ffe066"/><circle cx="150" cy="-7" r="5" fill="#fff"/><circle cx="200" cy="-7" r="5" fill="#fff"/>
+            <text x="100" y="22" fill="#ffe066" font-size="12" text-anchor="middle">±60 ms = PERFECT</text>
+          </g>
+          <text x="480" y="530" fill="#9a9ab0" font-size="12" text-anchor="middle">Obsidian spikes and laser lines cannot be shot: they must be dodged</text>
+        </svg>
+      </div>
+      <div class="cap"><h3>Firing: graze → lock → pulse</h3>
+        <div class="meta">Your idea, balanced so that grazing still matters</div>
+        <ul><li><b>Flux is the ammo</b>, and grazing earns it. Flying brave gives you more firepower.</li>
+        <li>Hold to lock onto up to 4 crystal spikes, then release on the beat. A <b>perfect</b> release scores double and plays a note in key. An off-beat release is weak and hits fewer targets.</li>
+        <li>Shattered spikes drop shards that refill Flux if you fly close, which pulls you back into risky lines.</li></ul>
+      </div>
+    </section>
+
+  </div>
+</main>
+</body>
+</html>

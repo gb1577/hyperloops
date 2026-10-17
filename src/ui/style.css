@@ -1,0 +1,34 @@
+html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+body { font: 13px/1.45 system-ui, 'Segoe UI', Roboto, sans-serif; color: #fff; }
+canvas { display: block; position: fixed; inset: 0; width: 100vw !important; height: 100vh !important; }
+
+#ref {
+  position: fixed; pointer-events: none; display: none; background: #000; object-fit: cover;
+}
+#ref.pip { display: block; right: 16px; bottom: 16px; width: 28vw; aspect-ratio: 16 / 9; border: 1px solid #fff6; box-shadow: 0 8px 30px #0008; }
+#ref.wipe { display: block; inset: 0; width: 100vw; height: 100vh; clip-path: inset(0 0 0 50%); }
+#wipe-line { position: fixed; top: 0; bottom: 0; left: 50%; width: 1px; background: #fff8; display: none; pointer-events: none; }
+#ref.wipe ~ #wipe-line { display: block; }
+
+#hud {
+  position: fixed; left: 16px; top: 16px; padding: 10px 14px; border-radius: 8px;
+  background: #0009; backdrop-filter: blur(6px); letter-spacing: .04em; min-width: 230px;
+  font-variant-numeric: tabular-nums;
+}
+#hud .scene { font-size: 15px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+#hud .row { display: flex; justify-content: space-between; gap: 16px; color: #ccd; }
+#hud .beats { display: flex; gap: 5px; margin: 8px 0 4px; }
+#hud .beats i { width: 8px; height: 8px; border-radius: 50%; background: #fff3; }
+#hud .beats i.on { background: #fff; }
+#hud .keys { margin-top: 8px; color: #99a; font-size: 11px; }
+#hud.hidden { display: none; }
+
+#start {
+  position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 45%, #0000 0%, #000c 70%); cursor: pointer; text-align: center;
+}
+#start h1 { font-weight: 200; letter-spacing: .5em; font-size: clamp(28px, 6vw, 64px); margin: 0 0 12px; padding-left: .5em; }
+#start h1 b { font-weight: 600; }
+#start p { color: #dde; margin: 4px; }
+#start .go { margin-top: 24px; padding: 10px 26px; border: 1px solid #fff; border-radius: 99px; letter-spacing: .3em; }
+#start.hidden { display: none; }

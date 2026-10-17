@@ -1,0 +1,5 @@
+node_modules
+dist
+
+# large source video, kept on disk only
+ref/
