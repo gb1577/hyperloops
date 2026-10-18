@@ -83,7 +83,8 @@ async function boot() {
     if (!dev) return;
     if (e.code === 'BracketRight') seekScene(world.sceneIndex + 1);
     else if (e.code === 'BracketLeft') seekScene(world.sceneIndex - 1);
-    else if (/^Digit\d$/.test(e.code)) seekScene((Number(e.code.slice(5)) + 9) % 10);
+    // 1..9, 0 = levels 1..10; with Shift: levels 11..20
+    else if (/^Digit\d$/.test(e.code)) seekScene(((Number(e.code.slice(5)) + 9) % 10) + (e.shiftKey ? 10 : 0));
     else if (e.code === 'KeyV') hud.cycleRef();
     else if (e.code === 'KeyH') hud.toggle();
     else if (e.code === 'KeyJ') game.setLaneMode(!game.laneMode, clock.time);

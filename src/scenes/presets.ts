@@ -40,12 +40,10 @@ export const PRESETS: ScenePreset[] = [
       {
         kind: 'floor', colorLow: '#3d2a2a', colorHigh: '#f2d4ca', size: 140, base: 0, cell: 6, amp: 12, freq: [0.05, 0.05],
         sharp: 1.3, ridged: true, spikeChance: 0.3, spikeHeight: 16, jitter: 0.45, clearance: [3, 16, 0.3], shadeJitter: 0.14,
-        ridgeGlow: { color: '#ffc878', intensity: 3.5 },
       },
     ],
     camera: { ...baseCam, height: 9, pitch: 0.06, sway: 1.2 },
     post: { ...basePost, vignetteColor: '#2a1916', vignette: 0.85 },
-    atmosphere: { mist: { color: '#ffe6c4', opacity: 0.4, height: [0, 5] } },
     play: { halfWidth: 9, down: 6, up: 5 },
     hazards: { patterns: ['scatter', 'slalom', 'aimed', 'wall'], perBeat: 0.9, radius: [1.4, 2.2], place: 'floor', spread: 0.9, color: '#ffd9c2' },
     transition: 'cut',
