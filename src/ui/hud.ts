@@ -18,7 +18,7 @@ export class Hud {
   constructor(backend: string) {
     this.ref = document.createElement('video');
     this.ref.id = 'ref';
-    this.ref.src = '/ref/hyperloops-01-game.mp4';
+    // the reference video lives only on the dev machine (ref/ is not in the repo): load it on first use
     this.ref.muted = true;
     this.ref.playsInline = true;
     this.ref.preload = 'auto';
@@ -69,6 +69,7 @@ export class Hud {
   cycleRef(): RefMode {
     const order: RefMode[] = ['off', 'pip', 'wipe'];
     this.refMode = order[(order.indexOf(this.refMode) + 1) % order.length];
+    if (this.refMode !== 'off' && !this.ref.src) this.ref.src = '/ref/hyperloops-01-game.mp4';
     this.ref.className = this.refMode === 'off' ? '' : this.refMode;
     return this.refMode;
   }

@@ -6,3 +6,7 @@ ref/
 
 # lossless masters, not used by the game (built from the MP3s)
 music/wave/
+
+# rendered teaser videos and itch.io upload zips
+video/
+release/

@@ -95,11 +95,17 @@ async function boot() {
     }
   });
 
-  window.addEventListener('resize', () => {
+  // also checked every frame: a page that boots at 0×0 (hidden tab, embed iframe) may never get a resize event
+  let sized = '';
+  const fit = () => {
+    const key = `${window.innerWidth}x${window.innerHeight}`;
+    if (key === sized) return;
+    sized = key;
     renderer.setSize(window.innerWidth, window.innerHeight);
     world.resize(window.innerWidth, window.innerHeight);
-  });
-  world.resize(window.innerWidth, window.innerHeight);
+  };
+  window.addEventListener('resize', fit);
+  fit();
 
   // debug handle for tooling
   (window as unknown as { hl: object }).hl = {
@@ -117,6 +123,7 @@ async function boot() {
 
   let last = performance.now();
   renderer.setAnimationLoop(() => {
+    fit();
     const now = performance.now();
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;

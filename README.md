@@ -1,12 +1,20 @@
 # HYPERLOOPS
 
-A rhythm graze-runner built from a 2016 After Effects video (`ref/hyperloops-01-game.mp4`).
-Design and plan: [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) · Storyboard: [docs/storyboard/index.html](docs/storyboard/index.html)
+**Fly a shard of light through low-poly worlds, on the beat.**
+
+A rhythm graze-runner for the browser: crystal spikes erupt on the beat of a 160 BPM soundtrack, and you thread
+through them as close as you dare, grab gold shards and dive through a hyperloop into the next of 15 worlds.
+Built from my 2016 After Effects music video (the first ten levels recreate its scenes).
+
+Design and plan: [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) · Storyboard: [docs/storyboard/index.html](docs/storyboard/index.html) · itch.io page text: [docs/itch-page.md](docs/itch-page.md)
 
 ## Run
 
 **Play without a server:** run `npm run build` once, then double-click `final/index.html`.
 It's a single self-contained file (code, styles and all music inlined, ~12 MB) that works straight from disk.
+
+**Release:** zip `final/index.html` as `index.html` at the zip root and upload it to itch.io as an HTML game
+(settings in [docs/itch-page.md](docs/itch-page.md)). Teaser videos are rendered into `video/`; both `video/` and `release/` are kept out of git.
 
 **Develop:**
 
@@ -19,7 +27,7 @@ Three.js r186 `WebGPURenderer` (falls back to WebGL2 automatically) + TSL post-p
 
 ## What's playable
 
-Fly a light-shard through the 10 scenes of the reference video, on the beat (160 BPM).
+Fly a light-shard through 15 levels (the 10 scenes of the reference video plus 5 new ones), on the beat (160 BPM).
 
 - **Steer** with the mouse, WASD / arrow keys, a gamepad, or touch-drag.
 - **Crystal spikes** erupt on the beat. A glowing ring on the ground warns one beat ahead.
