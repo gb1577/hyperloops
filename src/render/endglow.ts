@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import { float, length, smoothstep, uniform, uv, vec3 } from 'three/tsl';
 
 /**
- * A bright disc of light at the far end of a tunnel: solid white core with a short soft edge,
+ * A bright glow at the far end of a tunnel: a small solid core that fades out slowly and widely,
  * drawn over the terrain so it hides where the tunnel geometry stops.
  */
 export class EndGlow {
@@ -13,8 +13,8 @@ export class EndGlow {
     const d = length(uv().sub(0.5)).mul(2); // 0 centre → 1 edge
     const mat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, fog: false });
     mat.colorNode = vec3(this.intensity);
-    // hard core out to 55%, then a quick falloff
-    mat.opacityNode = float(1).sub(smoothstep(0.55, 1.0, d));
+    // tiny solid core, then a long soft falloff
+    mat.opacityNode = float(1).sub(smoothstep(0.04, 1.0, d)).pow(2.6);
     this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
     this.mesh.renderOrder = 5;
     this.mesh.frustumCulled = false;

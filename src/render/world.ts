@@ -57,6 +57,8 @@ export class World {
    * pulled back so spikes stay readable.
    */
   clarity = 0;
+  /** extra field of view in degrees (the warp after a level clear) */
+  fovKick = 0;
   preset: ScenePreset = PRESETS[0];
 
   constructor(renderer: THREE.WebGPURenderer) {
@@ -162,6 +164,11 @@ export class World {
     this.camera.position.set(pc.x + focus.x * follow + swayX + ux * lift, pc.y + focus.y * follow + swayY + uy * lift, z);
     this.camera.up.set(ux, uy, 0);
     this.camera.lookAt(pg.x + focus.x * 0.85 + ux * rise, pg.y + focus.y * 0.85 + uy * rise, pg.z);
+    const fov = c.fov + this.fovKick;
+    if (this.camera.fov !== fov) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
     const roll = c.roll + c.rollSwing * Math.sin((info.bar / c.rollPeriodBars) * Math.PI * 2);
     this.camera.rotateZ(roll + focus.bank * 0.35);
     this.camera.updateMatrixWorld();

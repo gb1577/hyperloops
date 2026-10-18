@@ -1,7 +1,5 @@
 import type { ScenePreset } from './types';
-import type { SectionRef, TrackId } from '../core/tracks';
 
-const S = (track: TrackId, section: number): SectionRef => ({ track, section });
 
 /**
  * The 10 scenes of the 2016 reference video, one per 12s (8 bars @160 BPM).
@@ -34,7 +32,7 @@ export const PRESETS: ScenePreset[] = [
   {
     name: 'Sepia Peaks',
     bars: 32,
-    music: [S('ref', 0), S('t2', 0), S('t2', 1), S('t2', 2)],
+    music: { track: 'ref', from: 0 },
     sky: { top: '#4a342e', horizon: '#cfae8c', ground: '#a07c64', sun: '#fff0b8', sunDir: [0, 0.16, -1], sunIntensity: 2.4, halo: 1.0 },
     fog: { color: '#e6c9a0', density: 0.006 },
     light: { color: '#fff0dc', intensity: 3, dir: [-0.5, 0.7, 0.3], hemiSky: '#fff2dc', hemiGround: '#2a1820', hemi: 0.6 },
@@ -55,7 +53,7 @@ export const PRESETS: ScenePreset[] = [
   {
     name: 'Jade Spires',
     bars: 32,
-    music: [S('ref', 1), S('t3', 0), S('t3', 1), S('t3', 2)],
+    music: { track: 't3', from: 0 },
     sky: { top: '#5c7a6a', horizon: '#a8c8b4', ground: '#88a894', sun: '#ffffff', sunDir: [0.12, 0.2, -1], sunIntensity: 2.4, halo: 1.0 },
     fog: { color: '#c8e6d2', density: 0.007 },
     light: { color: '#f2fff4', intensity: 3, dir: [-0.5, 0.7, 0.3], hemiSky: '#e6fff0', hemiGround: '#0c2016', hemi: 0.6 },
@@ -76,8 +74,8 @@ export const PRESETS: ScenePreset[] = [
   // 3 · Violet Tunnel — purple low-poly cave flying toward a blinding exit, laser streaks
   {
     name: 'Violet Tunnel',
-    bars: 32,
-    music: [S('ref', 2), S('t2', 3), S('t2', 4), S('t2', 5)],
+    bars: 40,
+    music: { track: 't2', from: 0 },
     sky: { top: '#ffffff', horizon: '#ffffff', ground: '#ffffff', sun: '#ffffff', sunDir: [0, 0, -1], sunIntensity: 3, halo: 0.9 },
     fog: { color: '#f0eaff', density: 0.015 },
     light: { color: '#f0e8ff', intensity: 2.6, dir: [-0.3, 0.5, 0.6], hemiSky: '#d8ccff', hemiGround: '#20184a', hemi: 0.7 },
@@ -98,8 +96,8 @@ export const PRESETS: ScenePreset[] = [
   // 4 · Ice Shards — teal/steel chaos, crossing white beams (the drop)
   {
     name: 'Ice Shards',
-    bars: 32,
-    music: [S('ref', 3), S('t3', 3), S('t3', 4), S('ref', 3)],
+    bars: 40,
+    music: { track: 't2', from: 4 },
     sky: { top: '#c9dcdc', horizon: '#e4f0ef', ground: '#c9dcdc', sun: '#ffffff', sunDir: [0.05, 0.05, -1], sunIntensity: 1.5, halo: 0.35 },
     fog: { color: '#dcebea', density: 0.017 },
     light: { color: '#f0ffff', intensity: 3.4, dir: [0.5, 0.5, 0.4], hemiSky: '#e0f4f4', hemiGround: '#28404a', hemi: 1.1 },
@@ -120,8 +118,8 @@ export const PRESETS: ScenePreset[] = [
   // 5 · Wire Cave — a meandering wireframe cave dissolving into white light, long black lines crossing
   {
     name: 'Wire Cave',
-    bars: 16,
-    music: [S('ref', 4), S('t3', 5)],
+    bars: 32,
+    music: { track: 'ref', from: 4 },
     sky: { top: '#7c7a9a', horizon: '#b4b2cc', ground: '#7c7a9a', sun: '#ffffff', sunDir: [0.1, 0.05, -1], sunIntensity: 0.9, halo: 0.08 },
     fog: { color: '#f2f0fa', density: 0, near: 30, far: 150 },
     light: { color: '#ffffff', intensity: 1, dir: [0, 1, 0], hemiSky: '#ffffff', hemiGround: '#888899', hemi: 1 },
@@ -142,7 +140,7 @@ export const PRESETS: ScenePreset[] = [
     post: { ...basePost, vignetteColor: '#262440', vignette: 1.0, pump: 0.12 },
     play: { halfWidth: 5, down: 5, up: 5 },
     hazards: { patterns: ['scatter', 'slalom'], perBeat: 0.6, shards: 3, radius: [0.9, 1.3], place: 'wall', color: '#e9e6ff' },
-    endGlow: { distance: 120, radius: 15, intensity: 2.2 },
+    endGlow: { distance: 120, radius: 34, intensity: 1.6 },
     transition: 'cut',
   },
 
@@ -150,9 +148,9 @@ export const PRESETS: ScenePreset[] = [
   {
     name: 'Amethyst Ridge',
     bars: 32,
-    music: [S('ref', 5), S('t2', 6), S('t2', 7), S('t2', 8)],
-    sky: { top: '#ffffff', horizon: '#ffe6ff', ground: '#c8a8f0', sun: '#ffd8ff', sunDir: [-0.2, 0.25, -1], sunIntensity: 1.6, halo: 0.6 },
-    fog: { color: '#f4e4ff', density: 0.0018 },
+    music: { track: 't2', from: 8 },
+    sky: { top: '#c3b4e6', horizon: '#efe2f6', ground: '#c8a8f0', sun: '#ffe2ff', sunDir: [-0.2, 0.25, -1], sunIntensity: 1.1, halo: 0.6, haloPower: 3, gradient: 0.75 },
+    fog: { color: '#ddd0ee', density: 0.006 },
     light: { color: '#ffffff', intensity: 1.6, dir: [-0.4, 0.8, 0.3], hemiSky: '#d0c0ff', hemiGround: '#120c40', hemi: 0.35 },
     layers: [
       {
@@ -171,7 +169,7 @@ export const PRESETS: ScenePreset[] = [
   {
     name: 'Rose Canyon',
     bars: 32,
-    music: [S('ref', 6), S('t3', 6), S('t3', 7), S('ref', 6)],
+    music: { track: 't3', from: 4 },
     sky: { top: '#fff2d0', horizon: '#fff8c0', ground: '#fff2d0', sun: '#fff6b0', sunDir: [0, 0.02, -1], sunIntensity: 3.5, halo: 1.5 },
     fog: { color: '#fff0d8', density: 0.014 },
     light: { color: '#fff4e8', intensity: 2.8, dir: [-0.3, 0.6, 0.5], hemiSky: '#ffd0e4', hemiGround: '#8a2858', hemi: 1.2 },
@@ -195,8 +193,8 @@ export const PRESETS: ScenePreset[] = [
   // 8 · Solar Shear — orange shards streaking sideways (second drop, top speed)
   {
     name: 'Solar Shear',
-    bars: 32,
-    music: [S('ref', 7), S('t2', 9), S('t2', 10), S('ref', 7)],
+    bars: 40,
+    music: { track: 'ref', from: 2 },
     sky: { top: '#fffbe6', horizon: '#ffffff', ground: '#fff6d0', sun: '#ffffff', sunDir: [0, 0, -1], sunIntensity: 1.6, halo: 0.5 },
     fog: { color: '#fffae8', density: 0.016 },
     light: { color: '#fff6e0', intensity: 3.4, dir: [0.5, 0.5, 0.4], hemiSky: '#fff0b0', hemiGround: '#d06018', hemi: 1.5 },
@@ -217,8 +215,8 @@ export const PRESETS: ScenePreset[] = [
   {
     name: 'Peach Dusk',
     bars: 32,
-    music: [S('ref', 8), S('t2', 11), S('ref', 8), S('t2', 11)],
-    sky: { top: '#d07868', horizon: '#f0c8a0', ground: '#d8a888', sun: '#fff6c0', sunDir: [0, 0.22, -1], sunIntensity: 2.3, halo: 1.0 },
+    music: { track: 'ref', from: 6 },
+    sky: { top: '#d07868', horizon: '#f0c8a0', ground: '#d8a888', sun: '#fff6c0', sunDir: [0, 0.22, -1], sunIntensity: 1.2, halo: 1.3, haloPower: 2.5, ring: 0.2, gradient: 0.85 },
     fog: { color: '#f8d4b0', density: 0.004 },
     light: { color: '#fff0d8', intensity: 3, dir: [-0.5, 0.7, 0.3], hemiSky: '#ffe0c8', hemiGround: '#5a2a24', hemi: 0.7 },
     layers: [
@@ -239,7 +237,7 @@ export const PRESETS: ScenePreset[] = [
   {
     name: 'Wire Night',
     bars: 16,
-    music: [S('t2', 8), S('ref', 9)],
+    music: { track: 't3', from: 6 },
     sky: { top: '#000208', horizon: '#0c3c3a', ground: '#a9bfb9', sun: '#3a8c84', sunDir: [0, 0.05, -1], sunIntensity: 0.15, halo: 0.3 },
     fog: { color: '#0c3634', density: 0.006 },
     light: { color: '#ffffff', intensity: 1, dir: [0, 1, 0], hemiSky: '#ffffff', hemiGround: '#ffffff', hemi: 1 },
@@ -255,7 +253,7 @@ export const PRESETS: ScenePreset[] = [
       haze: { color: '#e6efec', amount: 0.8, height: 0.38 },
     },
     play: { halfWidth: 10, down: 4, up: 4 },
-    hazards: { patterns: ['scatter', 'wall', 'slalom', 'aimed'], perBeat: 1, radius: [1.2, 1.8], place: 'floor', spread: 0.9, color: '#a8fff0' },
+    hazards: { patterns: ['scatter', 'wall', 'slalom', 'aimed'], perBeat: 1, radius: [1.2, 1.8], place: 'floor', spread: 0.9, color: '#a8fff0', style: 'wire' },
     transition: 'cut',
     fadeOut: 1,
   },

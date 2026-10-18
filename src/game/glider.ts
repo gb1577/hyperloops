@@ -18,6 +18,11 @@ export class Glider {
   readonly vel = new THREE.Vector2();
   readonly position = new THREE.Vector3();
   bank = 0;
+  /** extra roll on top of banking (the barrel roll after a level clear) */
+  roll = 0;
+  /** 0..1 boost: longer trail, hotter core (purely visual) */
+  boost = 0;
+  private readonly core: THREE.Mesh;
   /** lane mode state */
   lane = 2;
   /** tunnels: current angle around the wall; the camera rolls by `spin` to keep the glider at the bottom */
@@ -48,7 +53,7 @@ export class Glider {
     this.body.scale.setScalar(1.25);
     const coreMat = new THREE.MeshBasicNodeMaterial({ fog: false });
     coreMat.colorNode = vec3(2.6, 3.6, 4.2);
-    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22, 0), coreMat);
+    const core = (this.core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22, 0), coreMat));
     core.position.set(0, 0.05, 0.55);
     this.body.add(core);
     this.group.add(this.body);
@@ -134,7 +139,7 @@ export class Glider {
 
     this.position.set(path.x + this.offset.x, path.y + this.offset.y, path.z);
     this.group.position.copy(this.position);
-    this.body.rotation.set(0, 0, this.spin + this.bank);
+    this.body.rotation.set(0, 0, this.spin + this.bank + this.roll);
     this.updateTrail(time);
   }
 
@@ -178,7 +183,7 @@ export class Glider {
     this.position.set(path.x + this.offset.x, path.y + this.offset.y, path.z);
     this.group.position.copy(this.position);
     this.spin = 0;
-    this.body.rotation.set((this.vel.y / MAX_SPEED) * 0.35, 0, this.bank);
+    this.body.rotation.set((this.vel.y / MAX_SPEED) * 0.35, 0, this.bank + this.roll);
 
     this.updateTrail(time);
   }
@@ -189,22 +194,24 @@ export class Glider {
   }
 
   private updateTrail(time: number) {
+    this.core.scale.setScalar(1 + this.boost * (1.1 + 0.3 * Math.sin(time * 40)));
+    const trailSeconds = TRAIL_SECONDS * (1 + this.boost * 1.8);
     const h = this.history;
     h.unshift({ t: time, p: this.position.clone() });
-    while (h.length > 2 && time - h[h.length - 1].t > TRAIL_SECONDS + 0.05) h.pop();
-    if (h.length > 90) h.pop();
+    while (h.length > 2 && time - h[h.length - 1].t > trailSeconds + 0.05) h.pop();
+    if (h.length > 200) h.pop();
 
     let j = 0;
     const tmp = new THREE.Vector3();
     for (let i = 0; i <= TRAIL_SEGMENTS; i++) {
-      const target = time - (i / TRAIL_SEGMENTS) * TRAIL_SECONDS;
+      const target = time - (i / TRAIL_SEGMENTS) * trailSeconds;
       while (j < h.length - 1 && h[j + 1].t >= target) j++;
       const a = h[j];
       const b = h[Math.min(j + 1, h.length - 1)];
       const span = a.t - b.t;
       const f = span > 0 ? (a.t - target) / span : 0;
       tmp.copy(a.p).lerp(b.p, Math.min(1, Math.max(0, f)));
-      const w = 0.55 * (1 - i / TRAIL_SEGMENTS) + 0.05;
+      const w = (0.55 + this.boost * 0.25) * (1 - i / TRAIL_SEGMENTS) + 0.05;
       const cx = Math.cos(this.bank) * w;
       const cy = Math.sin(this.bank) * w;
       this.trailPos.set([tmp.x - cx, tmp.y - cy, tmp.z + 0.6, tmp.x + cx, tmp.y + cy, tmp.z + 0.6], i * 6);

@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-40 -40 966 180" role="img" aria-label="Hyperloops">
+  <!-- Neon wireframe wordmark: each letter is a hollow tube (bright outline, dark core) over a coloured glow.
+       Letters are centre-lines on a 100-unit cap height, built from straight strokes and r22 corners.
+       The "OO" uses the same parts: two letter-sized loops joined by an X, one diagonal passing over the other. -->
+  <defs>
+    <linearGradient id="hue" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="886" y2="0">
+      <stop offset="0" stop-color="#3fe8ff"/>
+      <stop offset="0.3" stop-color="#3fe8ff"/>
+      <stop offset="0.45" stop-color="#ff4fd8"/>
+      <stop offset="0.62" stop-color="#3fe8ff"/>
+      <stop offset="0.76" stop-color="#ff4fd8"/>
+      <stop offset="0.88" stop-color="#3fe8ff"/>
+      <stop offset="1" stop-color="#ff4fd8"/>
+    </linearGradient>
+    <filter id="bloom" x="-10%" y="-60%" width="120%" height="220%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+    <!-- absolute start + relative commands, so the shared gradient spans the whole word -->
+    <g id="word" fill="none" stroke-linejoin="round">
+      <!-- H --><path d="M0 0v100M70 0v100M0 50h70"/>
+      <!-- Y --><path d="M96 0l35 50l35 -50M131 50v50"/>
+      <!-- P --><path d="M192 100v-100h44a22 22 0 0 1 22 22v6a22 22 0 0 1 -22 22h-44"/>
+      <!-- E --><path d="M346 0h-62v100h62M284 50h48"/>
+      <!-- R --><path d="M372 100v-100h44a22 22 0 0 1 22 22v6a22 22 0 0 1 -22 22h-44M406 50l32 50"/>
+      <!-- L --><path d="M464 0v100h60"/>
+      <!-- OO: left loop, under-diagonal, right loop -->
+      <path d="M602 0h-30a22 22 0 0 0 -22 22v56a22 22 0 0 0 22 22h30M650 100l-48 -100M650 0h30a22 22 0 0 1 22 22v56a22 22 0 0 1 -22 22h-30"/>
+      <!-- P --><path d="M728 100v-100h44a22 22 0 0 1 22 22v6a22 22 0 0 1 -22 22h-44"/>
+      <!-- S --><path d="M886 0h-44a22 22 0 0 0 -22 22v6a22 22 0 0 0 22 22h22a22 22 0 0 1 22 22v6a22 22 0 0 1 -22 22h-44"/>
+    </g>
+    <!-- the over-diagonal of the OO, drawn as a second tube on top -->
+    <g id="over" fill="none" stroke-linejoin="round">
+      <path d="M602 100l48 -100"/>
+    </g>
+  </defs>
+
+  <!-- coloured bloom -->
+  <use href="#word" stroke="url(#hue)" stroke-width="16" filter="url(#bloom)" opacity="0.85"/>
+  <use href="#over" stroke="url(#hue)" stroke-width="16" filter="url(#bloom)" opacity="0.85"/>
+  <!-- tube: bright wall, coloured rim, dark core, faint wire down the middle -->
+  <g id="tube">
+    <use href="#word" stroke="#ffffff" stroke-width="13"/>
+    <use href="#word" stroke="url(#hue)" stroke-width="10.5" opacity="0.35"/>
+    <use href="#word" stroke="#05070c" stroke-width="8.5"/>
+    <use href="#word" stroke="url(#hue)" stroke-width="0.9" opacity="0.7"/>
+  </g>
+  <use href="#over" stroke="#ffffff" stroke-width="13"/>
+  <use href="#over" stroke="url(#hue)" stroke-width="10.5" opacity="0.35"/>
+  <use href="#over" stroke="#05070c" stroke-width="8.5"/>
+  <use href="#over" stroke="url(#hue)" stroke-width="0.9" opacity="0.7"/>
+</svg>

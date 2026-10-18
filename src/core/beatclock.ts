@@ -54,9 +54,6 @@ export class BeatClock {
   /** smoothed overall energy 0..1 */
   energy = 0;
 
-  /** @param base URL prefix for the track files */
-  constructor(private readonly base: string) {}
-
   /** Must be called from a user gesture. */
   async start() {
     if (!this.ctx) {
@@ -77,7 +74,7 @@ export class BeatClock {
       const ctx = this.ctx;
       this.loading = Promise.all(
         (Object.keys(TRACKS) as TrackId[]).map((id) =>
-          fetch(this.base + TRACKS[id].url)
+          fetch(TRACKS[id].url)
             .then((r) => r.arrayBuffer())
             .then((b) => ctx.decodeAudioData(b))
             .then((buf) => void (this.buffers[id] = buf)),
@@ -136,6 +133,17 @@ export class BeatClock {
     this.stopAll();
     this.pausedAt = Math.max(0, t);
     if (!this.paused) this.play();
+  }
+
+  /** hyperloop build: the music's low-pass closes over `seconds`, then snaps back open (DJ-style filter sweep) */
+  filterBuild(seconds: number) {
+    if (!this.ctx || !this.filter) return;
+    const f = this.filter.frequency;
+    const now = this.ctx.currentTime;
+    f.cancelScheduledValues(now);
+    f.setValueAtTime(20000, now);
+    f.exponentialRampToValueAtTime(1400, now + seconds);
+    f.exponentialRampToValueAtTime(20000, now + seconds + 0.35);
   }
 
   /** muffle the music (hit feedback): drops to a low-pass, then opens back up */

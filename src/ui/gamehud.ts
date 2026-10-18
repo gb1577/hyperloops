@@ -5,7 +5,8 @@ export class GameHud {
   private readonly multEl: HTMLSpanElement;
   private readonly comboEl: HTMLDivElement;
   private readonly fluxEl: HTMLElement;
-  private readonly shieldEls: HTMLElement[];
+  private shieldEls: HTMLElement[];
+  private readonly shieldBox: HTMLElement;
   private readonly bannerEl: HTMLDivElement;
   private readonly modeEl: HTMLDivElement;
   private readonly lockEls: HTMLDivElement[] = [];
@@ -30,7 +31,8 @@ export class GameHud {
     this.multEl = this.root.querySelector('.mult')!;
     this.comboEl = this.root.querySelector('.combo')!;
     this.fluxEl = this.root.querySelector('.flux i')!;
-    this.shieldEls = [...this.root.querySelectorAll<HTMLElement>('.shields b')];
+    this.shieldBox = this.root.querySelector('.shields')!;
+    this.shieldEls = [...this.shieldBox.querySelectorAll<HTMLElement>('b')];
     this.bannerEl = this.root.querySelector('.banner')!;
     this.modeEl = this.root.querySelector('.mode')!;
     this.ringEl = this.root.querySelector('.beatring')!;
@@ -62,6 +64,13 @@ export class GameHud {
     if (f !== l.flux) this.fluxEl.style.width = `${f}%`;
     if (shields !== l.shields) this.shieldEls.forEach((el, i) => el.classList.toggle('off', i >= shields));
     this.last = { score: s, mult, combo, flux: f, shields };
+  }
+
+  /** number of shield diamonds (depends on difficulty) */
+  setMaxShields(n: number) {
+    this.shieldBox.innerHTML = '<b></b>'.repeat(n);
+    this.shieldEls = [...this.shieldBox.querySelectorAll<HTMLElement>('b')];
+    this.last.shields = -1;
   }
 
   /** lock reticles at screen positions (pixels) */
@@ -104,6 +113,57 @@ export class GameHud {
 
   mode(text: string) {
     this.modeEl.textContent = text;
+  }
+
+  /** shown while flying into a hyperloop: a big code-like title and a small status word */
+  loopCard(title: string, status: string) {
+    const el = document.createElement('div');
+    el.className = 'loopcard';
+    el.innerHTML = '<div class="t"></div><div class="s"></div>';
+    el.querySelector('.t')!.textContent = title;
+    el.querySelector('.s')!.textContent = status;
+    this.root.append(el);
+    setTimeout(() => el.remove(), 2400);
+  }
+
+  /** the level-clear card: title, bonus, and where you are heading next */
+  levelClear(title: string, bonus: string, next: string) {
+    const el = document.createElement('div');
+    el.className = 'clearcard';
+    for (const [cls, text] of [['t', title], ['b', bonus], ['n', next]]) {
+      const line = document.createElement('div');
+      line.className = cls;
+      line.textContent = text;
+      el.append(line);
+    }
+    this.root.append(el);
+    setTimeout(() => el.remove(), 2600);
+  }
+
+  /** a gold gem flies from a screen position into the score, which pulses when it lands */
+  collect(x: number, y: number) {
+    const gem = document.createElement('div');
+    gem.className = 'gem';
+    this.root.append(gem);
+    const to = this.scoreEl.getBoundingClientRect();
+    const tx = to.left + to.width / 2;
+    const ty = to.top + to.height / 2;
+    const mx = (x + tx) / 2 + (Math.random() - 0.5) * 120;
+    const my = Math.min(y, ty) - 40;
+    const anim = gem.animate(
+      [
+        { transform: `translate(${x}px, ${y}px) rotate(45deg) scale(1.4)`, opacity: 1 },
+        { transform: `translate(${mx}px, ${my}px) rotate(225deg) scale(1)`, opacity: 1, offset: 0.45 },
+        { transform: `translate(${tx}px, ${ty}px) rotate(405deg) scale(0.5)`, opacity: 0.9 },
+      ],
+      { duration: 520, easing: 'cubic-bezier(.5,0,.9,.6)' },
+    );
+    anim.onfinish = () => {
+      gem.remove();
+      this.scoreEl.classList.remove('gain');
+      void this.scoreEl.offsetWidth;
+      this.scoreEl.classList.add('gain');
+    };
   }
 
   /** floating text at a screen position (pixels) */

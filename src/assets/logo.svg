@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 300" role="img" aria-label="Hyperloops">
+  <defs>
+    <linearGradient id="ring" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#ffd84a"/>
+      <stop offset="0.55" stop-color="#ffb3c8"/>
+      <stop offset="1" stop-color="#a8fff0"/>
+    </linearGradient>
+    <linearGradient id="word" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#bff6ff"/>
+    </linearGradient>
+    <radialGradient id="core" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.4" stop-color="#fff2c4" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#ffd84a" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- the tunnel: loops receding to a vanishing point -->
+  <g fill="none" stroke="url(#ring)" stroke-linecap="round" filter="url(#glow)">
+    <ellipse cx="320" cy="112" rx="118" ry="74" stroke-width="5"/>
+    <ellipse cx="320" cy="101" rx="82" ry="51" stroke-width="4" opacity="0.9"/>
+    <ellipse cx="320" cy="93" rx="54" ry="33" stroke-width="3" opacity="0.8"/>
+    <ellipse cx="320" cy="87" rx="33" ry="20" stroke-width="2.4" opacity="0.7"/>
+    <ellipse cx="320" cy="83" rx="18" ry="11" stroke-width="1.8" opacity="0.6"/>
+  </g>
+  <circle cx="320" cy="81" r="14" fill="url(#core)"/>
+
+  <!-- crystal spikes rising from the tunnel floor -->
+  <g fill="#bff6ff" opacity="0.85">
+    <polygon points="236,158 246,118 256,160"/>
+    <polygon points="388,160 397,128 406,157"/>
+    <polygon points="276,138 282,114 288,139" opacity="0.6"/>
+  </g>
+
+  <!-- the glider, flying in -->
+  <g filter="url(#glow)">
+    <polygon points="262,176 378,176 320,150" fill="#0b1c22" stroke="#bff6ff" stroke-width="3" stroke-linejoin="round"/>
+    <polygon points="306,172 334,172 320,160" fill="#ffffff"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="320" y="262" text-anchor="middle" fill="url(#word)"
+        font-family="system-ui, 'Segoe UI', Roboto, sans-serif" font-size="52" letter-spacing="15">
+    <tspan font-weight="200">HYPER</tspan><tspan font-weight="700">LOOPS</tspan>
+  </text>
+  <rect x="226" y="282" width="188" height="2" rx="1" fill="url(#ring)" opacity="0.8"/>
+</svg>

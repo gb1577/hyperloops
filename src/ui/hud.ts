@@ -1,4 +1,6 @@
 import type { BeatInfo } from '../core/beatclock';
+import type { Difficulty } from '../game/difficulty';
+import logoUrl from '../assets/logo.png';
 
 export type RefMode = 'off' | 'pip' | 'wipe';
 
@@ -31,21 +33,37 @@ export class Hud {
     this.start = document.createElement('div');
     this.start.id = 'start';
     this.start.innerHTML = `
-      <h1>HYPER<b>LOOPS</b></h1>
+      <h1 class="logo" style="--logo: url(${logoUrl})"><img src="${logoUrl}" alt="HYPERLOOPS"></h1>
       <p>steer with mouse · WASD / arrows · gamepad · touch-drag</p>
-      <p>graze the crystal spikes · skim the ground · don't touch</p>
+      <p>graze the crystal spikes · skim the ground · don't touch · hold space / click to boost</p>
       <p style="color:#99a">renderer: ${backend}</p>
-      <div class="go">CLICK TO FLY</div>`;
+      <div class="modes">
+        <button class="go" data-d="easy">EASY<small>more shields · fewer spikes</small></button>
+        <button class="go" data-d="hard">HARD<small>the full pattern</small></button>
+      </div>`;
 
     this.root.append(this.ref, wipeLine, this.hud, this.start);
   }
 
-  onStart(fn: () => void) {
-    const go = () => {
+  /** start buttons; `preferred` is highlighted (Enter picks it) */
+  onStart(preferred: Difficulty, fn: (d: Difficulty) => void) {
+    const buttons = [...this.start.querySelectorAll<HTMLButtonElement>('button[data-d]')];
+    let done = false;
+    const go = (d: Difficulty) => {
+      if (done) return;
+      done = true;
       this.start.classList.add('hidden');
-      fn();
+      window.removeEventListener('keydown', onKey);
+      fn(d);
     };
-    this.start.addEventListener('click', go, { once: true });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === 'Enter') go(preferred);
+    };
+    for (const b of buttons) {
+      b.classList.toggle('preferred', b.dataset.d === preferred);
+      b.addEventListener('click', () => go(b.dataset.d as Difficulty));
+    }
+    window.addEventListener('keydown', onKey);
   }
 
   cycleRef(): RefMode {
@@ -90,6 +108,6 @@ export class Hud {
       <div class="row"><span>bar in scene</span><span>${barInScene + 1}/${barsInScene}</span></div>
       <div class="row"><span>fps · ${this.hud.dataset.backend}</span><span>${this.fps}</span></div>
       <div class="row"><span>ref video</span><span>${this.refMode}</span></div>
-      <div class="keys">esc pause · M mute · L lanes/free · F firing · [ ] scene · 1-9,0 jump · I invincible · V ref video · H hud</div>`;
+      <div class="keys">DEV · [ ] scene · 1-9,0 jump · I invincible · J lanes · F firing · V ref video · H hud · type loops to lock</div>`;
   }
 }

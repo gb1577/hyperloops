@@ -12,15 +12,18 @@ export class Sky {
   readonly sunDir = uniform(new THREE.Vector3(0, 0.1, -1));
   readonly sunIntensity = uniform(1);
   private readonly halo = uniform(0.5);
+  private readonly haloPower = uniform(6);
+  private readonly ring = uniform(0.8);
+  private readonly gradient = uniform(0.4);
 
   constructor() {
     const dir = normalize(positionLocal);
     const y = dir.y;
-    const up = mix(this.horizon, this.top, smoothstep(0.0, 0.4, y));
+    const up = mix(this.horizon, this.top, smoothstep(0.0, this.gradient, y));
     const down = mix(this.horizon, this.ground, smoothstep(0.02, 0.5, y.negate()));
     const base = select(y.greaterThan(0), up, down);
     const s = max(dot(dir, normalize(this.sunDir)), 0);
-    const glow = pow(s, 6).mul(this.halo).mul(0.6).add(pow(s, 40).mul(0.8)).add(pow(s, 400).mul(2.5));
+    const glow = pow(s, this.haloPower).mul(this.halo).mul(0.6).add(pow(s, 40).mul(this.ring)).add(pow(s, 400).mul(2.5));
     const color = base.add(this.sun.mul(glow).mul(this.sunIntensity));
 
     const mat = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false, fog: false });
@@ -37,5 +40,8 @@ export class Sky {
     this.sun.value.set(p.sky.sun);
     this.sunDir.value.set(...p.sky.sunDir).normalize();
     this.halo.value = p.sky.halo;
+    this.haloPower.value = p.sky.haloPower ?? 6;
+    this.ring.value = p.sky.ring ?? 0.8;
+    this.gradient.value = p.sky.gradient ?? 0.4;
   }
 }

@@ -1,9 +1,9 @@
 import { PRESETS } from '../scenes/presets';
-import type { TrackId } from './tracks';
+import { TRACKS, type TrackId } from './tracks';
 
 /**
- * The run timeline. Music is built from 8-bar sections (12 s each) of any track (see tracks.ts).
- * A level lasts `preset.bars` bars and plays its `preset.music` playlist of sections back to back.
+ * The run timeline. A level lasts `preset.bars` bars and plays ONE track (`preset.music`) from a chosen
+ * 8-bar section (12 s) onward; the track never changes mid-level.
  * Run time t → which loop / scene / which track and where in it.
  */
 export const SECTION_LEN = 12; // seconds = 8 bars @ 160 BPM
@@ -36,16 +36,17 @@ export function locate(t: number): Place {
   }
   const sceneTime = lt - SCENE_STARTS[scene];
   const into = sceneTime % SECTION_LEN;
-  const list = PRESETS[scene].music;
-  const entry = list?.length ? list[Math.floor(sceneTime / SECTION_LEN) % list.length] : { track: 'ref' as const, section: scene };
+  const music = PRESETS[scene].music ?? { track: 'ref' as const, from: scene };
+  const available = Math.max(1, TRACKS[music.track].sections - music.from);
+  const section = music.from + (Math.floor(sceneTime / SECTION_LEN) % available);
   return {
     loop,
     scene,
     sceneTime,
     sceneLen: SCENE_LENS[scene],
     songTime: scene * SECTION_LEN + into,
-    track: entry.track,
-    trackTime: entry.section * SECTION_LEN + into,
+    track: music.track,
+    trackTime: section * SECTION_LEN + into,
   };
 }
 

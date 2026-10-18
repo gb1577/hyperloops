@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hyperloops · SFX Lab</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; background: #05070c; color: #e8f6ff; font: 14px/1.5 system-ui, 'Segoe UI', sans-serif;
+    display: flex; flex-direction: column; align-items: center; padding: 32px 16px; box-sizing: border-box; }
+  h1 { font-weight: 200; letter-spacing: .4em; margin: 0 0 4px; }
+  p.sub { color: #8aa; margin: 0 0 24px; text-align: center; }
+  .music { display: flex; gap: 10px; align-items: center; margin-bottom: 26px; flex-wrap: wrap; justify-content: center; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; width: min(1000px, 100%); }
+  .card { border: 1px solid #ffffff22; border-radius: 12px; padding: 14px 16px; background: #ffffff08; }
+  .card.big { border-color: #3fe8ff66; background: #3fe8ff0d; }
+  .card h2 { margin: 0 0 2px; font-size: 15px; letter-spacing: .12em; }
+  .card p { margin: 0 0 12px; color: #9ab; font-size: 12px; min-height: 36px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { font: inherit; color: #fff; background: #ffffff14; border: 1px solid #ffffff44; border-radius: 99px; padding: 7px 16px;
+    cursor: pointer; letter-spacing: .08em; }
+  button:hover { background: #ffffff26; border-color: #fff; }
+  button.on { background: #3fe8ff33; border-color: #3fe8ff; }
+  select { font: inherit; background: #111; color: #fff; border: 1px solid #ffffff44; border-radius: 6px; padding: 5px; }
+  kbd { border: 1px solid #ffffff44; border-radius: 4px; padding: 0 5px; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>SFX LAB</h1>
+<p class="sub">Shard pickup candidates: no musical pitch, so they sit on top of any key.<br>
+Play the music, then try each one as a single pickup and as a chain (8 pickups on the 8th notes at 160 BPM).<br>
+Highlighted = the new bigger ones. Keys <kbd>1</kbd>–<kbd>9</kbd> fire a single pickup.</p>
+
+<div class="music">
+  <select id="track">
+    <option value="/src/assets/audio/hyperloops-02.ogg">track 02</option>
+    <option value="/src/assets/audio/hyperloops-03.ogg">track 03</option>
+    <option value="/src/assets/audio/hyperloops-ref.ogg">ref track</option>
+  </select>
+  <button id="play">▶ MUSIC</button>
+  <label>sfx volume <input id="vol" type="range" min="0" max="1.5" step="0.05" value="0.8"></label>
+  <label>reverb <input id="rev" type="range" min="0" max="1" step="0.05" value="0.5"></label>
+  <label>key (tonal ones)
+    <select id="key">
+      <option>C</option><option>C#</option><option>D</option><option>D#</option><option>E</option><option>F</option>
+      <option>F#</option><option>G</option><option>G#</option><option selected>A</option><option>A#</option><option>B</option>
+    </select>
+  </label>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<script>
+const BEAT = 60 / 160;
+let ctx, out, dry, wet, noise, music, musicSrc, musicFilter;
+
+function init() {
+  if (ctx) return;
+  ctx = new AudioContext();
+  out = ctx.createGain();
+  out.gain.value = Number(document.getElementById('vol').value);
+  out.connect(ctx.destination);
+  const len = ctx.sampleRate;
+  noise = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = noise.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+
+  // "space" reverb: a synthetic stereo impulse (decaying noise, darker as it fades)
+  const irLen = Math.floor(ctx.sampleRate * 2.2);
+  const ir = ctx.createBuffer(2, irLen, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const ch = ir.getChannelData(c);
+    let lp = 0;
+    for (let i = 0; i < irLen; i++) {
+      const k = i / irLen;
+      lp += (Math.random() * 2 - 1 - lp) * (0.9 - 0.75 * k);
+      ch[i] = lp * Math.pow(1 - k, 3.2);
+    }
+  }
+  const conv = ctx.createConvolver();
+  conv.buffer = ir;
+  wet = ctx.createGain();
+  wet.gain.value = Number(document.getElementById('rev').value) * 1.4;
+  conv.connect(wet).connect(out);
+  // everything goes to `dry` (straight out) and into the reverb
+  dry = ctx.createGain();
+  dry.connect(out);
+  dry.connect(conv);
+}
+
+/** frequency of a scale degree in the chosen key, minor pentatonic, octave `oct` above A4-ish */
+function keyFreq(degree, oct = 1) {
+  const root = document.getElementById('key').selectedIndex; // 0 = C
+  const penta = [0, 3, 5, 7, 10];
+  const semi = penta[((degree % 5) + 5) % 5] + 12 * Math.floor(degree / 5);
+  return 261.63 * Math.pow(2, (root + semi) / 12 + oct);
+}
+
+/** FM bell: carrier + inharmonic modulator, bright attack that mellows */
+function bell(t, freq, vol, decay, pan = 0, ratio = 3.5, index = 2.2) {
+  const car = ctx.createOscillator();
+  const mod = ctx.createOscillator();
+  const modGain = ctx.createGain();
+  const g = ctx.createGain();
+  const p = ctx.createStereoPanner();
+  car.frequency.value = freq;
+  mod.frequency.value = freq * ratio;
+  modGain.gain.setValueAtTime(freq * index, t);
+  modGain.gain.exponentialRampToValueAtTime(freq * 0.05, t + decay * 0.6);
+  mod.connect(modGain).connect(car.frequency);
+  p.pan.value = pan;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.003);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  car.connect(g).connect(p).connect(dry);
+  car.start(t);
+  mod.start(t);
+  car.stop(t + decay + 0.05);
+  mod.stop(t + decay + 0.05);
+}
+
+/** a band of noise sweeping between two frequencies */
+function sweep(t, from, to, dur, vol, q = 6, pan = 0) {
+  const s = ctx.createBufferSource();
+  s.buffer = noise;
+  const f = ctx.createBiquadFilter();
+  f.type = 'bandpass';
+  f.Q.value = q;
+  f.frequency.setValueAtTime(from, t);
+  f.frequency.exponentialRampToValueAtTime(to, t + dur);
+  const g = ctx.createGain();
+  const p = ctx.createStereoPanner();
+  p.pan.value = pan;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + dur * 0.25);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f).connect(g).connect(p).connect(dry);
+  s.start(t, Math.random() * 0.4);
+  s.stop(t + dur + 0.02);
+}
+
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+/** a tiny sine ping: at these heights and lengths it reads as a glint, not a note */
+function ping(t, freq, vol, decay, pan = 0) {
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  const p = ctx.createStereoPanner();
+  o.frequency.value = freq;
+  p.pan.value = pan;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.001);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  o.connect(g).connect(p).connect(dry);
+  o.start(t);
+  o.stop(t + decay + 0.02);
+}
+
+/** filtered noise grain; high Q bandpass gives a glassy ring with no clear note */
+function grain(t, type, freq, q, vol, decay, pan = 0) {
+  const s = ctx.createBufferSource();
+  s.buffer = noise;
+  const f = ctx.createBiquadFilter();
+  f.type = type;
+  f.frequency.value = freq;
+  f.Q.value = q;
+  const g = ctx.createGain();
+  const p = ctx.createStereoPanner();
+  p.pan.value = pan;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  s.connect(f).connect(g).connect(p).connect(dry);
+  s.start(t, Math.random() * 0.5);
+  s.stop(t + decay + 0.02);
+}
+
+/** each variant: (time, chainStep) -> schedules one pickup. chainStep grows sparkle/brightness, never pitch */
+const VARIANTS = [
+  {
+    name: 'A+ · BIG GLITTER',
+    info: 'A, but larger: a soft whoosh for body, a denser and wider spray of glints that lasts longer, a crisper tick.',
+    big: true,
+    play(t, n) {
+      sweep(t, 2500, 9000, 0.18, 0.28, 2.5);
+      grain(t, 'highpass', 7500, 0.7, 0.22, 0.035);
+      const count = 18 + Math.min(n, 10);
+      for (let i = 0; i < count; i++) {
+        const k = i / count;
+        ping(t + Math.pow(k, 1.5) * 0.26, rnd(4200, 12000), 0.075 * (1 - k) + 0.02, rnd(0.04, 0.13), rnd(-1, 1));
+      }
+    },
+  },
+  {
+    name: 'G · BIG BLING (in key)',
+    info: 'Classic pickup "bling": two bright bell strikes up a fourth, shimmer shower, long space tail. Chain climbs the scale.',
+    big: true,
+    play(t, n) {
+      const d = Math.min(n, 9);
+      bell(t, keyFreq(d, 1), 0.22, 0.9, -0.2);
+      bell(t + 0.07, keyFreq(d + 2, 1), 0.2, 1.2, 0.2);
+      sweep(t, 4000, 11000, 0.25, 0.35, 5);
+      for (let i = 0; i < 10; i++) ping(t + 0.06 + i * 0.03, rnd(6000, 12000), 0.03, 0.08, rnd(-0.9, 0.9));
+    },
+  },
+  {
+    name: 'H · CRYSTAL BURST',
+    info: 'No pitch. A punchy glass crack with body, a shower of ringing shards flying wide, then a big space tail.',
+    big: true,
+    play(t, n) {
+      sweep(t, 9000, 1800, 0.12, 0.5, 2.5);
+      grain(t, 'highpass', 4000, 0.7, 0.45, 0.04);
+      const count = 14 + Math.min(n, 8);
+      for (let i = 0; i < count; i++) {
+        const k = i / count;
+        grain(t + 0.01 + Math.pow(k, 1.4) * 0.3, 'bandpass', rnd(2500, 12000), 30, 0.7 * (1 - k) + 0.15, rnd(0.08, 0.25), rnd(-1, 1));
+      }
+    },
+  },
+  {
+    name: 'I · SPACE SWOOSH BLING',
+    info: 'A rising whoosh that blooms into one big glassy ring with sparkles. Big "got it!" feel, no clear note.',
+    big: true,
+    play(t, n) {
+      sweep(t, 800, 9000, 0.22, 0.45, 3);
+      const at = t + 0.16;
+      // inharmonic bell cluster: rings big, no single pitch
+      for (const [r, v] of [[1, 0.14], [1.47, 0.1], [2.09, 0.08], [2.93, 0.06], [4.1, 0.04]]) bell(at, 1180 * r, v, 1.1, rnd(-0.4, 0.4), 1.41, 0.8);
+      const tail = 8 + Math.min(n, 8);
+      for (let i = 0; i < tail; i++) ping(at + i * 0.035, rnd(6500, 12500), 0.035, 0.09, rnd(-0.9, 0.9));
+    },
+  },
+  {
+    name: 'J · ARCADE BLING (in key)',
+    info: 'Big and bright, game-coin style: a fast 3-note bell arpeggio in key with a glitter tail. Most "addictive".',
+    big: true,
+    play(t, n) {
+      const d = Math.min(n, 7);
+      [0, 2, 5].forEach((s, i) => bell(t + i * 0.05, keyFreq(d + s, 1), 0.17, 0.5 + i * 0.25, -0.3 + i * 0.3, 2, 1.4));
+      grain(t, 'highpass', 7000, 0.7, 0.2, 0.05);
+      for (let i = 0; i < 8; i++) ping(t + 0.12 + i * 0.03, rnd(7000, 12500), 0.03, 0.08, rnd(-0.9, 0.9));
+    },
+  },
+  {
+    name: 'K · SHATTER IN SPACE',
+    info: 'Heaviest: low glassy thump, crystal explodes into a wide stereo spray, slow sparkling decay into the reverb.',
+    big: true,
+    play(t, n) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.frequency.setValueAtTime(320, t);
+      o.frequency.exponentialRampToValueAtTime(90, t + 0.12);
+      g.gain.setValueAtTime(0.35, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+      o.connect(g).connect(dry);
+      o.start(t);
+      o.stop(t + 0.17);
+      sweep(t, 12000, 3000, 0.2, 0.45, 1.5);
+      const count = 20 + Math.min(n, 10);
+      for (let i = 0; i < count; i++) {
+        const k = i / count;
+        grain(t + 0.02 + Math.pow(k, 1.8) * 0.5, 'bandpass', rnd(3000, 12500), 35, 0.6 * (1 - k) + 0.1, rnd(0.1, 0.3), rnd(-1, 1));
+      }
+    },
+  },
+  {
+    name: 'A · GLITTER SCATTER',
+    info: 'A dozen micro-glints spraying outward and fading, like dust catching light.',
+    play(t, n) {
+      const count = 8 + Math.min(n, 8);
+      for (let i = 0; i < count; i++) {
+        const dt = Math.pow(i / count, 1.6) * 0.16;
+        ping(t + dt, rnd(5200, 11500), 0.06 * (1 - i / count) + 0.015, rnd(0.03, 0.09), rnd(-0.8, 0.8));
+      }
+      grain(t, 'highpass', 9000, 0.7, 0.12, 0.03);
+    },
+  },
+  {
+    name: 'B · ICE SHATTER',
+    info: 'A crisp crack, then a few ringing glass grains scattering left and right.',
+    play(t, n) {
+      grain(t, 'highpass', 6500, 0.7, 0.22, 0.025);
+      const count = 5 + Math.min(n, 5);
+      for (let i = 0; i < count; i++) {
+        grain(t + rnd(0.005, 0.12), 'bandpass', rnd(5000, 12000), 28, 0.5 * (1 - i / count) + 0.15, rnd(0.06, 0.16), rnd(-0.9, 0.9));
+      }
+    },
+  },
+  {
+    name: 'C · SPACE BLING',
+    info: 'A fast upward shimmer sweep with a sparkly tail. Bright and "collect-y".',
+    play(t, n) {
+      const s = ctx.createBufferSource();
+      s.buffer = noise;
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.Q.value = 9;
+      f.frequency.setValueAtTime(3500, t);
+      f.frequency.exponentialRampToValueAtTime(12000, t + 0.09);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.45, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+      s.connect(f).connect(g).connect(dry);
+      s.start(t, Math.random() * 0.5);
+      s.stop(t + 0.16);
+      const tail = 4 + Math.min(n, 6);
+      for (let i = 0; i < tail; i++) ping(t + 0.05 + i * 0.022, rnd(7000, 12000), 0.035, 0.05, rnd(-0.7, 0.7));
+    },
+  },
+  {
+    name: 'D · SOFT SPARKLE',
+    info: 'Gentle and airy: a breath of high noise with a few faint glints. Least intrusive.',
+    play(t, n) {
+      grain(t, 'highpass', 8000, 0.5, 0.08 + Math.min(n, 8) * 0.006, 0.12);
+      for (let i = 0; i < 4; i++) ping(t + rnd(0, 0.07), rnd(8000, 12500), 0.03, rnd(0.04, 0.08), rnd(-0.6, 0.6));
+    },
+  },
+  {
+    name: 'E · CRYSTAL POP',
+    info: 'A tight glassy "tik" with a short metallic halo. Punchy, very short.',
+    play(t, n) {
+      // inharmonic cluster close together: metallic, no single pitch
+      for (const r of [1, 1.37, 1.83, 2.41]) ping(t, 4300 * r, 0.05, 0.05 + Math.random() * 0.02, rnd(-0.3, 0.3));
+      grain(t, 'highpass', 10000, 0.7, 0.16, 0.02);
+      if (n >= 4) for (let i = 0; i < 3; i++) ping(t + 0.03 + i * 0.03, rnd(9000, 12500), 0.03, 0.05, rnd(-0.8, 0.8));
+    },
+  },
+  {
+    name: 'F · STARDUST',
+    info: 'A short rising swirl of glints panning across, like crystal dust drawn into the ship.',
+    play(t, n) {
+      const count = 10 + Math.min(n, 6);
+      for (let i = 0; i < count; i++) {
+        const k = i / count;
+        ping(t + k * 0.13, 5000 + k * 6500 + rnd(-400, 400), 0.045 * (0.4 + 0.6 * Math.sin(k * Math.PI)), 0.05, -0.8 + 1.6 * k);
+      }
+      grain(t + 0.1, 'highpass', 9500, 0.7, 0.06, 0.08);
+    },
+  },
+];
+
+const grid = document.getElementById('grid');
+VARIANTS.forEach((v, i) => {
+  const card = document.createElement('div');
+  card.className = v.big ? 'card big' : 'card';
+  card.innerHTML = `<h2>${v.name}</h2><p>${v.info}</p><div class="row">
+    <button data-a="one">SINGLE</button><button data-a="chain">CHAIN ×8</button><button data-a="beat">ON BEAT ×4</button></div>`;
+  card.querySelector('[data-a=one]').onclick = () => fire(i, 1);
+  card.querySelector('[data-a=chain]').onclick = () => fire(i, 8, BEAT / 2);
+  card.querySelector('[data-a=beat]').onclick = () => fire(i, 4, BEAT);
+  grid.append(card);
+});
+
+function fire(i, count, gap = 0) {
+  init();
+  const t0 = ctx.currentTime + 0.02;
+  for (let k = 0; k < count; k++) VARIANTS[i].play(t0 + k * gap, k);
+}
+
+document.getElementById('vol').oninput = (e) => { if (out) out.gain.value = Number(e.target.value); };
+document.getElementById('rev').oninput = (e) => { if (wet) wet.gain.value = Number(e.target.value) * 1.4; };
+
+document.getElementById('play').onclick = (e) => {
+  init();
+  if (!music) {
+    music = new Audio();
+    music.loop = true;
+    musicSrc = ctx.createMediaElementSource(music);
+    const mg = ctx.createGain();
+    mg.gain.value = 0.8;
+    musicFilter = ctx.createBiquadFilter();
+    musicFilter.type = 'lowpass';
+    musicFilter.frequency.value = 20000;
+    musicFilter.Q.value = 0.8;
+    musicSrc.connect(musicFilter).connect(mg).connect(ctx.destination);
+  }
+  if (music.paused) {
+    music.src = document.getElementById('track').value;
+    void music.play();
+    e.target.textContent = '■ MUSIC';
+    e.target.classList.add('on');
+  } else {
+    music.pause();
+    e.target.textContent = '▶ MUSIC';
+    e.target.classList.remove('on');
+  }
+};
+document.getElementById('track').onchange = (e) => {
+  if (music && !music.paused) { music.src = e.target.value; void music.play(); }
+};
+
+// ---------- hyperloop (level end) sounds: ENTRY plays as you fly in, CROSS at the finish line ----------
+const LOOP_SECONDS = 2.4;
+
+function boom(t, vol = 0.6) {
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.frequency.setValueAtTime(110, t);
+  o.frequency.exponentialRampToValueAtTime(32, t + 0.6);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
+  o.connect(g).connect(dry);
+  o.start(t);
+  o.stop(t + 0.85);
+}
+
+function shower(t, count = 60, len = 1.1) {
+  for (let i = 0; i < count; i++) {
+    const k = i / count;
+    ping(t + Math.pow(k, 1.3) * len, rnd(3800, 12500), 0.07 * (1 - k) + 0.015, rnd(0.05, 0.16), rnd(-1, 1));
+  }
+}
+
+function ringRush(t) {
+  // one short whoosh per ring, closer together as you speed through
+  for (let i = 0; i < 16; i++) {
+    const at = t + LOOP_SECONDS * (1 - Math.pow(1 - i / 16, 1.25));
+    sweep(at, 5000, 900, 0.12, 0.1 + 0.18 * (i / 16), 3, i % 2 ? 0.5 : -0.5);
+  }
+}
+
+function riser(t, dur = LOOP_SECONDS, peak = 0.4) {
+  const s = ctx.createBufferSource();
+  s.buffer = noise;
+  s.loop = true;
+  const f = ctx.createBiquadFilter();
+  f.type = 'bandpass';
+  f.Q.value = 4;
+  f.frequency.setValueAtTime(300, t);
+  f.frequency.exponentialRampToValueAtTime(9000, t + dur);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + dur);
+  g.gain.linearRampToValueAtTime(0, t + dur + 0.03);
+  s.connect(f).connect(g).connect(dry);
+  s.start(t);
+  s.stop(t + dur + 0.05);
+}
+
+// --- electrical primitives ---
+/** detuned saws whose pitch and brightness climb: a power-up hum */
+function hum(t, dur, f0, f1, vol) {
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.Q.value = 6;
+  lp.frequency.setValueAtTime(300, t);
+  lp.frequency.exponentialRampToValueAtTime(3200, t + dur);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + dur * 0.85);
+  g.gain.linearRampToValueAtTime(0, t + dur + 0.04);
+  lp.connect(g).connect(dry);
+  for (const det of [-9, 0, 11]) {
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.detune.value = det;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    o.connect(lp);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  }
+}
+/** random electric arcs: tiny clicks of bright noise, getting denser */
+function crackle(t, dur, count, vol) {
+  for (let i = 0; i < count; i++) {
+    const at = t + dur * Math.sqrt(Math.random());
+    grain(at, 'highpass', rnd(1800, 6000), 0.7, vol * rnd(0.4, 1), rnd(0.004, 0.018), rnd(-0.8, 0.8));
+  }
+}
+/** a laser "pew": FM sine diving down */
+function zap(t, vol, from = 2600, to = 180, dur = 0.14, pan = 0) {
+  const o = ctx.createOscillator();
+  const m = ctx.createOscillator();
+  const mg = ctx.createGain();
+  const g = ctx.createGain();
+  const p = ctx.createStereoPanner();
+  o.type = 'square';
+  o.frequency.setValueAtTime(from, t);
+  o.frequency.exponentialRampToValueAtTime(to, t + dur);
+  m.frequency.setValueAtTime(from * 0.5, t);
+  m.frequency.exponentialRampToValueAtTime(to * 0.5, t + dur);
+  mg.gain.value = from * 0.6;
+  m.connect(mg).connect(o.frequency);
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 5000;
+  p.pan.value = pan;
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(lp).connect(g).connect(p).connect(dry);
+  o.start(t); m.start(t);
+  o.stop(t + dur + 0.02); m.stop(t + dur + 0.02);
+}
+/** amplitude-chopped noise: the buzz of a tesla coil, the chop rate climbing */
+function tesla(t, dur, vol) {
+  const s = ctx.createBufferSource();
+  s.buffer = noise;
+  s.loop = true;
+  const bp = ctx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.Q.value = 2;
+  bp.frequency.setValueAtTime(1500, t);
+  bp.frequency.exponentialRampToValueAtTime(4500, t + dur);
+  const chop = ctx.createGain();
+  chop.gain.value = 0;
+  const lfo = ctx.createOscillator();
+  lfo.type = 'square';
+  lfo.frequency.setValueAtTime(40, t);
+  lfo.frequency.exponentialRampToValueAtTime(140, t + dur);
+  const depth = ctx.createGain();
+  depth.gain.value = 0.5;
+  lfo.connect(depth).connect(chop.gain);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + dur * 0.9);
+  g.gain.linearRampToValueAtTime(0, t + dur + 0.03);
+  s.connect(bp).connect(chop).connect(g).connect(dry);
+  s.start(t); lfo.start(t);
+  s.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
+}
+/** the big electric discharge at the line */
+function discharge(t, vol = 0.6) {
+  boom(t, vol * 0.8);
+  grain(t, 'bandpass', 1600, 0.9, vol, 0.35);
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(220, t);
+  o.frequency.exponentialRampToValueAtTime(45, t + 0.4);
+  g.gain.setValueAtTime(vol * 0.35, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+  o.connect(g).connect(dry);
+  o.start(t); o.stop(t + 0.5);
+  crackle(t, 0.5, 20, 0.35);
+}
+function filterBuild(t, len = LOOP_SECONDS) {
+  if (!musicFilter || !document.getElementById('fsweep').checked) return;
+  const f = musicFilter.frequency;
+  f.cancelScheduledValues(t);
+  f.setValueAtTime(20000, t);
+  f.exponentialRampToValueAtTime(1400, t + len);
+  f.exponentialRampToValueAtTime(20000, t + len + 0.35);
+}
+const ringTimes = (t) => Array.from({ length: 16 }, (_, i) => t + LOOP_SECONDS * (1 - Math.pow(1 - i / 16, 1.25)));
+
+/** low mains hum: detuned saws + square an octave up, low-passed, with a slow electric throb */
+function lowHum(t, dur, vol, throb = 9) {
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.Q.value = 3;
+  lp.frequency.setValueAtTime(240, t);
+  lp.frequency.exponentialRampToValueAtTime(900, t + dur);
+  const trem = ctx.createGain();
+  trem.gain.value = 0.75;
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = throb;
+  const depth = ctx.createGain();
+  depth.gain.value = 0.25;
+  lfo.connect(depth).connect(trem.gain);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + dur * 0.7);
+  g.gain.setValueAtTime(vol, t + dur);
+  g.gain.linearRampToValueAtTime(0, t + dur + 0.06);
+  lp.connect(trem).connect(g).connect(dry);
+  for (const [type, f, det] of [['sawtooth', 55, -7], ['sawtooth', 55, 8], ['square', 110, 0]]) {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.detune.value = det;
+    o.frequency.setValueAtTime(f, t);
+    o.frequency.exponentialRampToValueAtTime(f * 1.12, t + dur);
+    o.connect(lp);
+    o.start(t);
+    o.stop(t + dur + 0.1);
+  }
+  lfo.start(t);
+  lfo.stop(t + dur + 0.1);
+}
+
+/** toneless hum: a low noise rumble + a brighter noise buzz, throbbing at two unrelated rates */
+function tonelessHum(t, dur) {
+  const end = t + dur;
+  const throb = ctx.createGain();
+  throb.gain.value = 0.7;
+  for (const [rate, amount] of [[9, 0.18], [13.7, 0.12]]) {
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = rate;
+    const depth = ctx.createGain();
+    depth.gain.value = amount;
+    lfo.connect(depth).connect(throb.gain);
+    lfo.start(t); lfo.stop(end + 0.1);
+  }
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.9 * 0.625, t + dur * 0.7);
+  g.gain.setValueAtTime(0.9 * 0.625, end);
+  g.gain.linearRampToValueAtTime(0, end + 0.06);
+  throb.connect(g).connect(dry);
+  for (const [type, from, to, q, level] of [['lowpass', 160, 420, 0.7, 1], ['bandpass', 320, 1300, 0.9, 0.45]]) {
+    const src = ctx.createBufferSource();
+    src.buffer = noise;
+    src.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = type;
+    f.Q.value = q;
+    f.frequency.setValueAtTime(from, t);
+    f.frequency.exponentialRampToValueAtTime(to, end);
+    const lv = ctx.createGain();
+    lv.gain.value = level;
+    src.connect(f).connect(lv).connect(throb);
+    src.start(t, Math.random() * 0.4); src.stop(end + 0.1);
+  }
+}
+
+/** E5 retuned: B♭0 root (fifth of E♭), sliding up a semitone into the note, audible fast then swelling */
+function bbHum(t, dur) {
+  const end = t + dur;
+  const vol = 0.55 * 0.625;
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.Q.value = 3;
+  lp.frequency.setValueAtTime(200, t);
+  lp.frequency.exponentialRampToValueAtTime(850, end);
+  const trem = ctx.createGain();
+  trem.gain.value = 0.75;
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = 9;
+  const depth = ctx.createGain();
+  depth.gain.value = 0.25;
+  lfo.connect(depth).connect(trem.gain);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol * 0.5, t + Math.min(0.8, dur * 0.3));
+  g.gain.exponentialRampToValueAtTime(vol, end);
+  g.gain.linearRampToValueAtTime(0, end + 0.06);
+  lp.connect(trem).connect(g).connect(dry);
+  const root = 29.135, semi = Math.pow(2, 1 / 12);
+  for (const [type, f, det] of [['sawtooth', root, -7], ['sawtooth', root, 8], ['square', root * 2, 0]]) {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.detune.value = det;
+    o.frequency.setValueAtTime(f / semi, t);
+    o.frequency.exponentialRampToValueAtTime(f, t + Math.min(1.2, dur * 0.5));
+    o.connect(lp);
+    o.start(t); o.stop(end + 0.1);
+  }
+  lfo.start(t); lfo.stop(end + 0.1);
+}
+
+const LOOP_SOUNDS = [
+  {
+    name: 'E8 · LOW HUM IN B♭ (in game)',
+    info: 'E5, an octave lower and tuned to B♭ (the fifth of E♭, the key of most of the music). Starts 1.2 s before the mouth.',
+    len: LOOP_SECONDS + 1.2,
+    enter(t) { bbHum(t, LOOP_SECONDS + 1.2); },
+    cross(t) { boom(t, 0.45); grain(t, 'bandpass', 1600, 0.9, 0.35, 0.3); shower(t + 0.05, 40, 0.9); },
+  },
+  {
+    name: 'E7 · TONELESS HUM (in game)',
+    info: 'Like E5 but no pitch: low rumble + buzz from filtered noise, throbbing like current. Line: soft discharge + glitter.',
+    enter(t) { tonelessHum(t, LOOP_SECONDS); },
+    cross(t) { boom(t, 0.45); grain(t, 'bandpass', 1600, 0.9, 0.35, 0.3); shower(t + 0.05, 40, 0.9); },
+  },
+  {
+    name: 'E5 · LOW HUM',
+    info: 'A deep, steady electrical hum that swells through the tunnel with a slight throb. Line: soft discharge + glitter.',
+    enter(t) { lowHum(t, LOOP_SECONDS, 0.3); },
+    cross(t) { boom(t, 0.45); grain(t, 'bandpass', 1600, 0.9, 0.35, 0.3); shower(t + 0.05, 40, 0.9); },
+  },
+  {
+    name: 'E6 · LOW HUM, PULSING',
+    info: 'The same hum, but throbbing on the 16th notes so it locks to the music.',
+    enter(t) { lowHum(t, LOOP_SECONDS, 0.3, 1 / (BEAT / 4)); },
+    cross(t) { boom(t, 0.45); grain(t, 'bandpass', 1600, 0.9, 0.35, 0.3); shower(t + 0.05, 40, 0.9); },
+  },
+  {
+    name: 'E1 · POWER HUM',
+    info: 'Entry: a deep electrical hum powering up through the tunnel, crackling arcs building. Line: an electric discharge + glitter.',
+    enter(t) { hum(t, LOOP_SECONDS, 48, 190, 0.22); crackle(t, LOOP_SECONDS, 40, 0.25); },
+    cross(t) { discharge(t); shower(t + 0.05, 40, 0.9); },
+  },
+  {
+    name: 'E2 · LASER RINGS',
+    info: 'Entry: a laser zap as you pass each ring, over a soft hum. Line: a big triple zap and a shower.',
+    enter(t) { hum(t, LOOP_SECONDS, 60, 120, 0.08); ringTimes(t).forEach((at, i) => zap(at, 0.06 + 0.06 * (i / 16), 3000 + i * 120, 220, 0.12, i % 2 ? 0.5 : -0.5)); },
+    cross(t) { [0, 0.05, 0.1].forEach((d, i) => zap(t + d, 0.16, 4200 - i * 600, 90, 0.35, [-0.6, 0.6, 0][i])); boom(t, 0.4); shower(t + 0.05, 40, 0.9); },
+  },
+  {
+    name: 'E3 · TESLA COIL',
+    info: 'Entry: a buzzing high-voltage arc, the buzz speeding up toward the line. Line: discharge.',
+    enter(t) { tesla(t, LOOP_SECONDS, 0.35); crackle(t, LOOP_SECONDS, 30, 0.3); },
+    cross(t) { discharge(t, 0.7); shower(t + 0.1, 30, 0.8); },
+  },
+  {
+    name: 'E4 · HUM + LASERS',
+    info: 'E1 and E2 together: the power-up hum with a laser at each ring. The most "hyperloop".',
+    enter(t) { hum(t, LOOP_SECONDS, 48, 190, 0.18); crackle(t, LOOP_SECONDS, 24, 0.2); ringTimes(t).forEach((at, i) => zap(at, 0.05 + 0.05 * (i / 16), 3000 + i * 120, 220, 0.1, i % 2 ? 0.5 : -0.5)); },
+    cross(t) { discharge(t); [0, 0.06].forEach((d, i) => zap(t + d, 0.14, 4000 - i * 700, 90, 0.3, i ? 0.5 : -0.5)); shower(t + 0.05, 40, 0.9); },
+  },
+  {
+    name: '0 · CURRENT',
+    info: 'What the game does now: silent entry; at the line a rising whoosh into a glitter shower.',
+    enter() {},
+    cross(t) { sweep(t, 600, 10000, 0.6, 0.35, 2); grain(t + 0.45, 'highpass', 6000, 0.7, 0.3, 0.06); shower(t + 0.45); },
+  },
+  {
+    name: '1 · RING RUSH',
+    info: 'Entry: a whoosh for every ring you pass, speeding up. Line: bright burst + glitter shower.',
+    enter: ringRush,
+    cross(t) { grain(t, 'highpass', 3000, 0.7, 0.5, 0.08); sweep(t, 9000, 2000, 0.3, 0.4, 1.5); shower(t + 0.05, 50, 0.9); },
+  },
+  {
+    name: '2 · WARP RISER',
+    info: 'Entry: one long noise riser building tension. Line: a deep sub boom and a blast into the space reverb.',
+    enter: (t) => riser(t),
+    cross(t) { boom(t); grain(t, 'lowpass', 2500, 0.7, 0.6, 0.35); shower(t + 0.1, 30, 0.8); },
+  },
+  {
+    name: '3 · RUSH + BOOM',
+    info: 'Ring whooshes on entry, then the deep boom with glitter at the line. The most "event" of the set.',
+    enter: ringRush,
+    cross(t) { boom(t, 0.5); grain(t, 'highpass', 3500, 0.7, 0.45, 0.1); shower(t + 0.05, 60, 1.2); },
+  },
+  {
+    name: '4 · SOFT PORTAL',
+    info: 'Subtle: a quiet airy riser on entry and a soft whoomph with a light shimmer at the line.',
+    enter: (t) => riser(t, LOOP_SECONDS, 0.15),
+    cross(t) { sweep(t, 2000, 300, 0.5, 0.35, 1.2); shower(t + 0.1, 25, 0.9); },
+  },
+];
+
+const loopGrid = document.createElement('div');
+loopGrid.className = 'grid';
+loopGrid.style.marginTop = '14px';
+const loopTitle = document.createElement('h1');
+loopTitle.textContent = 'HYPERLOOP';
+loopTitle.style.cssText = 'font-size:20px;margin:34px 0 4px';
+const loopSub = document.createElement('p');
+loopSub.className = 'sub';
+loopSub.innerHTML = 'Level-end gate sounds. FULL plays the entry, then the finish line 2.4 s later, like in the game.<br><label><input type=checkbox id=fsweep checked> music filter sweep on FULL (the music closes down through the tunnel and snaps open at the line)</label>';
+document.body.append(loopTitle, loopSub, loopGrid);
+LOOP_SOUNDS.forEach((v) => {
+  const card = document.createElement('div');
+  card.className = 'card big';
+  card.innerHTML = `<h2>${v.name}</h2><p>${v.info}</p><div class="row">
+    <button data-a="full">FULL</button><button data-a="enter">ENTRY</button><button data-a="cross">LINE</button></div>`;
+  const at = () => { init(); return ctx.currentTime + 0.02; };
+  card.querySelector('[data-a=full]').onclick = () => { const t = at(); const L = v.len ?? LOOP_SECONDS; filterBuild(t, L); v.enter(t); v.cross(t + L); };
+  card.querySelector('[data-a=enter]').onclick = () => v.enter(at());
+  card.querySelector('[data-a=cross]').onclick = () => v.cross(at());
+  loopGrid.append(card);
+});
+
+window.addEventListener('keydown', (e) => {
+  const n = Number(e.key);
+  if (n >= 1 && n <= 9 && n <= VARIANTS.length) fire(n - 1, 1);
+});
+</script>
+</body>
+</html>

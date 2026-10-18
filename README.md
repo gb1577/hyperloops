@@ -5,6 +5,11 @@ Design and plan: [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) · Storyboard: [docs
 
 ## Run
 
+**Play without a server:** run `npm run build` once, then double-click `dist/index.html`.
+It's a single self-contained file (code, styles and all music inlined, ~12 MB) that works straight from disk.
+
+**Develop:**
+
 ```bash
 npm install
 npm run dev        # http://localhost:5173
@@ -28,16 +33,22 @@ Fly a light-shard through the 10 scenes of the reference video, on the beat (160
   from three tracks (the 2016 soundtrack plus hyperloops-02 and -03), all on one 160 BPM grid.
   See `src/core/tracks.ts` and each preset's `music`.
 
+Pick **EASY** (5 shields, fewer spikes, wider gaps, no aimed spikes) or **HARD** on the start screen.
+The game remembers your last choice, and Enter starts it.
+
 | Key | Action |
 |---|---|
-| click | start (audio needs a user gesture) |
 | Esc | pause / resume |
 | M | mute / unmute |
-| [ / ] | previous / next scene |
-| 1–9, 0 | jump to scene 1–10 |
-| F | lock-on firing experiment (dev, off by default) |
-| L | switch to the lane-snapping control prototype (dev) |
-| I | invincible (dev) |
+
+**Dev mode:** type `loops` on the keyboard (or open with `?dev`) to unlock these, and type it again to lock:
+
+| Key | Action |
+|---|---|
+| [ / ] · 1–9, 0 | previous / next level · jump to level 1–10 |
+| I | invincible |
+| J | lane-snapping control prototype |
+| F | lock-on firing experiment |
 | V | reference video: off → picture-in-picture → 50/50 wipe |
 | H | debug HUD |
 
@@ -50,6 +61,7 @@ In the console, `hl.presets` holds the live scene presets. Edit one, then call `
 src/core/beatclock.ts   music engine + master clock: sections scheduled on the Web Audio clock
 src/core/timeline.ts    run time → loop / scene / which track section is playing
 src/core/tracks.ts      the music tracks and how they were prepared (trim / tempo-match)
+src/assets/audio/       the game-ready tracks (Opus), bundled into the build
 src/core/noise.ts       hash / value noise / fbm / ridged (world-grid keyed, seamless chunks)
 src/render/terrain.ts   streaming flat-shaded chunks: floor, ceiling, tube
 src/render/sky.ts       gradient dome + sun halo (TSL)
