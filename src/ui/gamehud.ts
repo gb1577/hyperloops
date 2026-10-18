@@ -19,7 +19,7 @@ export class GameHud {
     this.root = document.createElement('div');
     this.root.id = 'ghud';
     this.root.innerHTML = `
-      <div class="score"><span class="val">0</span><span class="mult">×1</span></div>
+      <div class="score"><span class="val">0</span><span class="mult">×1</span><span class="boost"></span></div>
       <div class="combo"></div>
       <div class="flux"><span>FLUX</span><i></i></div>
       <div class="shields"><b></b><b></b><b></b></div>
@@ -64,6 +64,17 @@ export class GameHud {
     if (f !== l.flux) this.fluxEl.style.width = `${f}%`;
     if (shields !== l.shields) this.shieldEls.forEach((el, i) => el.classList.toggle('off', i >= shields));
     this.last = { score: s, mult, combo, flux: f, shields };
+  }
+
+  private boostShown = 0;
+
+  /** the "BOOST ×2" tag next to the multiplier; 0 hides it */
+  setBoost(factor: number) {
+    if (factor === this.boostShown) return;
+    this.boostShown = factor;
+    const el = this.root.querySelector<HTMLElement>('.score .boost')!;
+    el.textContent = factor ? `BOOST ×${factor}` : '';
+    el.classList.toggle('on', factor > 0);
   }
 
   /** number of shield diamonds (depends on difficulty) */

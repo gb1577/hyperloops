@@ -8,6 +8,12 @@
       "port": 5173
     },
     {
+      "name": "build",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "preview", "--port", "4173", "--strictPort"],
+      "port": 4173
+    },
+    {
       "name": "docs",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8123", "--directory", "docs"],

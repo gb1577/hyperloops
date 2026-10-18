@@ -35,7 +35,7 @@ export class Hud {
     this.start.innerHTML = `
       <h1 class="logo" style="--logo: url(${logoUrl})"><img src="${logoUrl}" alt="HYPERLOOPS"></h1>
       <p>steer with mouse · WASD / arrows · gamepad · touch-drag</p>
-      <p>graze the crystal spikes · skim the ground · don't touch · hold space / click to boost</p>
+      <p>graze the crystal spikes · skim the ground · don't touch · hold space / click to boost for ×2 score</p>
       <p style="color:#99a">renderer: ${backend}</p>
       <div class="modes">
         <button class="go" data-d="easy">EASY<small>more shields · fewer spikes</small></button>

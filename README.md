@@ -5,7 +5,7 @@ Design and plan: [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) · Storyboard: [docs
 
 ## Run
 
-**Play without a server:** run `npm run build` once, then double-click `dist/index.html`.
+**Play without a server:** run `npm run build` once, then double-click `final/index.html`.
 It's a single self-contained file (code, styles and all music inlined, ~12 MB) that works straight from disk.
 
 **Develop:**

@@ -30,6 +30,8 @@ const WARP_SECONDS = 1.3;
  */
 const BOOST_SURGE = 2.2;
 const BOOST_FOV = 10;
+/** score multiplier while boosting */
+const BOOST_SCORE = 2;
 const GRAZE_RADIUS = 2.2;
 const SHARD_RADIUS = 1.9;
 /** below this terrain clearance you are "skimming": flux + score trickle */
@@ -49,7 +51,7 @@ const HINTS: [number, string][] = [
   [8, 'FLY CLOSE TO SPIKES TO GRAZE THEM'],
   [14, 'COLLECT THE GOLD SHARDS'],
   [20, "DON'T TOUCH · 3 SHIELDS"],
-  [26, 'HOLD SPACE / CLICK TO BOOST'],
+  [26, 'HOLD SPACE / CLICK TO BOOST · DOUBLE SCORE'],
 ];
 const FIRE_HINTS: [number, string][] = [
   [2.5, 'STEER · MOUSE · WASD · ARROWS'],
@@ -83,6 +85,11 @@ export class Game {
   private warpAt = -10;
   /** 0..1, eased toward whether boost is held */
   boost = 0;
+
+  /** boost is far enough in to pay out */
+  get boosted() {
+    return this.boost > 0.6;
+  }
   /** the glider has flown into the current hyperloop */
   private inLoop = false;
   private humming = false;
@@ -243,6 +250,7 @@ export class Game {
     this.glider.setVisible(this.state !== 'dead' && (!invuln || Math.floor(now * 16) % 2 === 0));
     this.fx.update(now, dt, this.world.camera);
     this.hud.set(this.score, this.multiplier, this.combo, this.flux, this.shields);
+    this.hud.setBoost(this.state === 'play' && this.boosted ? BOOST_SCORE : 0);
 
     this.focus.x = this.glider.offset.x + (Math.random() - 0.5) * this.shake;
     this.focus.y = this.glider.offset.y + (Math.random() - 0.5) * this.shake;
@@ -314,7 +322,8 @@ export class Game {
 
   private play(t: number, now: number, dt: number, p: THREE.Vector3) {
     if (this.firing) this.fire(t, now, p);
-    const mult = this.multiplier;
+    // boosting doubles everything you earn: the view is wider and the glider further ahead, so it's riskier
+    const mult = this.multiplier * (this.boosted ? BOOST_SCORE : 1);
     this.score += dt * 10 * mult;
 
     // in lane mode the neighbouring lane counts as a graze

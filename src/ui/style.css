@@ -58,6 +58,8 @@ canvas { display: block; position: fixed; inset: 0; width: 100vw !important; hei
 #ghud .score .val { font-size: 30px; font-weight: 600; letter-spacing: .06em; }
 #ghud .score .mult { font-size: 22px; font-weight: 800; color: #ffe066; }
 #ghud .score .mult.bump { animation: bump .35s ease-out; }
+#ghud .score .boost { font-size: 13px; font-weight: 800; letter-spacing: .2em; color: #bff6ff; text-shadow: 0 0 10px #3fe8ff; }
+#ghud .score .boost.on { animation: bump .3s ease-out; }
 @keyframes bump { 0% { transform: scale(1.8); } 100% { transform: scale(1); } }
 #ghud .combo { position: absolute; left: 26px; top: 60px; font-size: 12px; letter-spacing: .25em; color: #ffe066; }
 #ghud .flux { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); width: min(320px, 60vw); height: 8px;
