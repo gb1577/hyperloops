@@ -60,6 +60,9 @@ async function boot() {
     world.clarity = 1;
     game.start(d);
     if (transitions) game.god = true;
+    // ?level=N starts the run at level N (1-based), e.g. ?level=11 for Neon Dusk
+    const level = Number(params.get('level'));
+    if (level >= 1 && level <= PRESETS.length) seekScene(level - 1);
     gameHud.showFlux(game.firing);
     gameHud.show(true);
     modeText();

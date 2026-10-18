@@ -279,7 +279,7 @@ export class Game {
     this.fx.ring(p, '#fff3c4', 10, now, 0.7);
     this.fx.emit(p, 40, '#fff3c4', 22, now);
     this.hud.levelClear(
-      next === 0 ? 'ALL 10 CLEARED' : `LEVEL ${level} CLEAR`,
+      next === 0 ? `ALL ${PRESETS.length} CLEARED` : `LEVEL ${level} CLEAR`,
       `+${bonus.toLocaleString('en-US')}`,
       `ARRIVING AT ${next + 1} · ${PRESETS[next].name.toUpperCase()}`,
     );

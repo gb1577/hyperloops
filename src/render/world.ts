@@ -9,6 +9,7 @@ import { Sky } from './sky';
 import { LineFX } from './lines';
 import { Post } from './post';
 import { EndGlow } from './endglow';
+import { Atmosphere } from './atmosphere';
 
 /** Distance travelled at time t: speed changes per scene, but position stays a pure function of time (seek-safe). */
 export function zAt(t: number): number {
@@ -45,6 +46,7 @@ export class World {
   private readonly sky = new Sky();
   private readonly lines = new LineFX();
   private readonly endGlow = new EndGlow();
+  private readonly atmosphere = new Atmosphere();
   private readonly sun = new THREE.DirectionalLight();
   private readonly hemi = new THREE.HemisphereLight();
   private readonly fogExp = new THREE.FogExp2('#ffffff', 0.01);
@@ -63,7 +65,7 @@ export class World {
 
   constructor(renderer: THREE.WebGPURenderer) {
     this.scene.fog = this.fogExp;
-    this.scene.add(this.sky.mesh, this.sun, this.sun.target, this.hemi, this.lines.group, this.endGlow.mesh);
+    this.scene.add(this.sky.mesh, this.sun, this.sun.target, this.hemi, this.lines.group, this.endGlow.mesh, this.atmosphere.group);
     this.post = new Post(renderer, this.scene, this.camera);
     this.setScene(0);
   }
@@ -118,6 +120,7 @@ export class World {
     this.sky.apply(p);
     this.post.apply(p);
     this.lines.apply(p);
+    this.atmosphere.apply(p);
     if (p.fog.near !== undefined && p.fog.far !== undefined) {
       this.fogLinear.color.set(p.fog.color);
       this.fogLinear.near = p.fog.near;
@@ -139,6 +142,8 @@ export class World {
 
   private readonly tmpA = new THREE.Vector3();
   private readonly tmpB = new THREE.Vector3();
+  private readonly tmpC = new THREE.Vector3();
+  private lastT = 0;
 
   update(info: BeatInfo, bass: number, focus: Focus = NO_FOCUS) {
     const idx = info.sceneIndex % PRESETS.length;
@@ -191,6 +196,17 @@ export class World {
 
     for (const l of this.layers) l.update(z);
     this.lines.update(info, this.camera);
+    if (p.atmosphere) {
+      const floor = this.layers[0]?.kind === 'floor' ? this.layers[0] : null;
+      this.atmosphere.update(
+        this.camera,
+        Math.min(0.1, Math.max(0, t - this.lastT)),
+        (x, zz) => (floor ? -floor.clearance(x, 0, zz) : 0),
+        (zz) => this.pathPoint(zz, this.tmpC).x,
+        t,
+      );
+    }
+    this.lastT = t;
 
     // music reactivity
     const pump = Math.max(info.kick * 0.7, bass);

@@ -82,7 +82,7 @@ export class Sfx {
     if (!ctx || !this.out) return;
     const t = ctx.currentTime;
     const end = t + seconds;
-    const vol = 0.55;
+    const vol = 0.32;
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.Q.value = 3;

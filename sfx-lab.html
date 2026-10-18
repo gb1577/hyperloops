@@ -618,7 +618,7 @@ function tonelessHum(t, dur) {
 /** E5 retuned: B♭0 root (fifth of E♭), sliding up a semitone into the note, audible fast then swelling */
 function bbHum(t, dur) {
   const end = t + dur;
-  const vol = 0.55 * 0.625;
+  const vol = 0.32 * 0.625;
   const lp = ctx.createBiquadFilter();
   lp.type = 'lowpass';
   lp.Q.value = 3;

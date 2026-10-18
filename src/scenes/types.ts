@@ -34,6 +34,11 @@ export interface TerrainLayerSpec {
   wireframe?: boolean;
   /** wireframe line opacity */
   opacity?: number;
+  /**
+   * glowing lines on the terrain, brightest high up. ridges (default): only the sharp creases of the upper
+   * mountains · all: every facet edge everywhere, for black wireframe-and-fill worlds
+   */
+  ridgeGlow?: { color: Hex; intensity: number; mode?: 'ridges' | 'all' };
   /** tube: walls never come closer to the centre line than this */
   minRadius?: number;
   /** tube: how far the cave centre meanders sideways (the camera follows it) */
@@ -118,6 +123,11 @@ export interface ScenePreset {
     color: Hex;
     /** crystal: lit glowing cones (default) · wire: dark cones drawn as glowing wireframe, like wire terrain */
     style?: 'crystal' | 'wire';
+  };
+  /** painterly extras: mist banks in the valleys */
+  atmosphere?: {
+    /** height range is in world y; opacity scales every puff */
+    mist?: { color: Hex; opacity: number; height: [number, number] };
   };
   /** a hard disc of light at the far end of a tunnel that hides where it stops */
   endGlow?: { distance: number; radius: number; intensity: number };

@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New Levels · Concepts</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #07080c; color: #e8f2ff; font: 14px/1.5 system-ui, 'Segoe UI', sans-serif; padding: 28px 16px 60px; }
+  h1 { font-weight: 200; letter-spacing: .4em; text-align: center; margin: 0 0 4px; }
+  p.sub { text-align: center; color: #8a98a8; margin: 0 0 28px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(560px, 100%), 1fr)); gap: 22px; max-width: 1200px; margin: 0 auto; }
+  figure { margin: 0; }
+  canvas { width: 100%; height: auto; display: block; border-radius: 8px; box-shadow: 0 8px 30px #000a; }
+  figcaption { margin-top: 8px; }
+  figcaption b { letter-spacing: .15em; }
+  figcaption span { color: #9aa8b8; font-size: 13px; display: block; }
+</style>
+</head>
+<body>
+<h1>NEW LEVELS</h1>
+<p class="sub">Concept frames for levels 11–15. A rough sketch of the look, not the engine: colours, terrain style, diamonds, mood.</p>
+<div class="grid" id="grid"></div>
+<script>
+const W = 960, H = 540;
+
+// seeded noise
+function mulberry(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function hash(x, z, s) { const n = Math.sin(x * 127.1 + z * 311.7 + s * 74.7) * 43758.5453; return n - Math.floor(n); }
+function vnoise(x, z, s) {
+  const xi = Math.floor(x), zi = Math.floor(z), xf = x - xi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = zf * zf * (3 - 2 * zf);
+  const a = hash(xi, zi, s), b = hash(xi + 1, zi, s), c = hash(xi, zi + 1, s), d = hash(xi + 1, zi + 1, s);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function fbm(x, z, s) { let f = 0, a = 0.5; for (let i = 0; i < 4; i++) { f += a * vnoise(x, z, s + i * 13); x *= 2.03; z *= 2.03; a *= 0.5; } return f; }
+
+const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const mix = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+const css = (c, a = 1) => `rgba(${c.map((v) => Math.max(0, Math.min(255, v | 0))).join(',')},${a})`;
+
+function sky(g, L) {
+  const grd = g.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0, L.sky[0]);
+  grd.addColorStop(L.horizon, L.sky[1]);
+  grd.addColorStop(1, L.sky[2]);
+  g.fillStyle = grd;
+  g.fillRect(0, 0, W, H);
+  if (L.sun) {
+    const r = g.createRadialGradient(W / 2, H * L.horizon, 0, W / 2, H * L.horizon, H * L.sun.r);
+    r.addColorStop(0, L.sun.c);
+    r.addColorStop(1, 'rgba(0,0,0,0)');
+    g.globalCompositeOperation = L.dark ? 'lighter' : 'source-over';
+    g.fillStyle = r;
+    g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = 'source-over';
+  }
+}
+
+/**
+ * an upright faceted diamond (octahedron) spinning about its vertical axis: the outline stays straight,
+ * the four side corners slide around and the facets facing the light are brighter
+ */
+function diamond(g, x, y, s, rot, L) {
+  const top = [x, y - 1.35 * s], bot = [x, y + 1.35 * s];
+  // the 4 equator corners, turned by rot; only their x moves on screen (plus a hint of depth)
+  const eq = [0, 1, 2, 3].map((k) => {
+    const a = rot + (k * Math.PI) / 2;
+    return { x: x + Math.cos(a) * 0.75 * s, y: y + Math.sin(a) * 0.08 * s, front: Math.sin(a) };
+  });
+  const shades = L.diamond.shades;
+  g.save();
+  if (L.diamond.glow) { g.shadowColor = L.diamond.glow; g.shadowBlur = s * 0.9; }
+  // facets between neighbouring corners that face us (both corners not hidden behind)
+  const faces = [];
+  for (let k = 0; k < 4; k++) {
+    const a = eq[k], b = eq[(k + 1) % 4];
+    const facing = (a.front + b.front) / 2;
+    if (facing < -0.05) continue;
+    const light = Math.cos(rot + (k + 0.5) * (Math.PI / 2) - 2.2) * 0.5 + 0.5;
+    faces.push({ a, b, facing, light });
+  }
+  faces.sort((p, q) => p.facing - q.facing);
+  for (const f of faces) {
+    for (const [tip, shadeBias] of [[top, 0], [bot, 2]]) {
+      g.beginPath();
+      g.moveTo(...tip);
+      g.lineTo(f.a.x, f.a.y);
+      g.lineTo(f.b.x, f.b.y);
+      g.closePath();
+      g.fillStyle = shades[(Math.round(f.light * 1.99) + shadeBias) % 4];
+      g.fill();
+    }
+  }
+  g.shadowBlur = 0;
+  g.strokeStyle = L.diamond.edge;
+  g.lineWidth = Math.max(1, s * 0.035);
+  g.beginPath();
+  for (const f of faces) {
+    g.moveTo(...top); g.lineTo(f.a.x, f.a.y); g.lineTo(...bot);
+    g.moveTo(...top); g.lineTo(f.b.x, f.b.y); g.lineTo(...bot);
+    g.moveTo(f.a.x, f.a.y); g.lineTo(f.b.x, f.b.y);
+  }
+  g.stroke();
+  g.restore();
+}
+
+/** sky diamonds: far ones small and faint; each turns at its own slow speed and bobs gently */
+function makeDiamonds(L) {
+  const r = mulberry(L.seed * 7 + 3);
+  const list = [];
+  for (let i = 0; i < L.diamond.count; i++) {
+    const depth = 0.25 + r() * 0.75;
+    let x, y, s;
+    if (L.tunnel) {
+      // tumbling out of the light at the end of the tunnel
+      const k = 1 - depth;
+      x = W / 2 + (r() - 0.5) * 260 * k;
+      y = H * 0.46 + (r() - 0.5) * 160 * k;
+      s = (8 + 26 * k) * L.diamond.scale;
+    } else {
+      x = r() * W;
+      y = H * (0.05 + r() * (L.horizon - 0.12));
+      s = (12 + 60 * (1 - depth)) * L.diamond.scale;
+    }
+    list.push({ x, y, s, depth, rot: r() * Math.PI, spin: (0.25 + r() * 0.35) * (r() < 0.5 ? -1 : 1), phase: r() * 6.28 });
+  }
+  return list.sort((a, b) => b.depth - a.depth);
+}
+
+function drawDiamonds(g, list, t, L) {
+  for (const d of list) {
+    g.globalAlpha = 0.45 + 0.55 * (1 - d.depth);
+    diamond(g, d.x, d.y + Math.sin(t * 0.7 + d.phase) * d.s * 0.12, d.s, d.rot + t * d.spin, L);
+  }
+  g.globalAlpha = 1;
+}
+
+/** perspective low-poly terrain, painted far to near */
+function terrain(g, L) {
+  const cols = 34, rows = 30, f = 520, camH = L.camH, hy = H * L.horizon;
+  const lo = hex(L.ground[0]), hi = hex(L.ground[1]), fog = hex(L.fog);
+  const pt = [];
+  for (let j = 0; j <= rows; j++) {
+    const z = 2.2 * Math.pow(1.13, j);
+    const row = [];
+    for (let i = 0; i <= cols; i++) {
+      const xw = (i / cols - 0.5) * z * 4.2 + (hash(i, j, L.seed) - 0.5) * z * 0.12;
+      const side = Math.min(1, Math.abs(xw) / (L.valley + z * 0.05));
+      const hgt = Math.pow(fbm(xw * L.freq, z * L.freq, L.seed), L.sharp) * L.amp * (0.25 + 0.75 * side * side);
+      row.push({ sx: W / 2 + (xw / z) * f, sy: hy + ((camH - hgt) / z) * f, h: hgt / L.amp, z });
+    }
+    pt.push(row);
+  }
+  const light = L.lightX ?? -0.6;
+  for (let j = rows - 1; j >= 0; j--) {
+    for (let i = 0; i < cols; i++) {
+      const a = pt[j][i], b = pt[j][i + 1], c = pt[j + 1][i], d = pt[j + 1][i + 1];
+      for (const tri of [[a, b, c], [b, d, c]]) {
+        const hAvg = (tri[0].h + tri[1].h + tri[2].h) / 3;
+        const slope = (tri[1].h - tri[0].h) * 2.5;
+        const shade = 0.72 + 0.28 * Math.max(-1, Math.min(1, slope * light + (tri[0].h - tri[2].h) * 1.4));
+        const fogK = Math.min(1, Math.pow(tri[0].z / 75, 1.4) * L.fogAmt);
+        let col = mix(lo, hi, Math.min(1, hAvg * 1.2)).map((v) => v * shade);
+        col = mix(col, fog, fogK);
+        g.beginPath();
+        g.moveTo(tri[0].sx, tri[0].sy);
+        g.lineTo(tri[1].sx, tri[1].sy);
+        g.lineTo(tri[2].sx, tri[2].sy);
+        g.closePath();
+        if (L.style !== 'wire') {
+          g.fillStyle = L.style === 'wirefill' ? css(mix(hex(L.fillDark), fog, fogK * 0.9)) : css(col);
+          g.fill();
+          if (L.style === 'fill') { g.strokeStyle = css(col); g.lineWidth = 0.6; g.stroke(); }
+        }
+        if (L.style !== 'fill') {
+          const wc = mix(hex(L.wire), fog, fogK);
+          g.strokeStyle = css(wc, L.style === 'wire' ? 0.8 : 0.9);
+          g.lineWidth = L.style === 'wire' ? 0.8 : 1;
+          if (L.wireGlow && fogK < 0.6) { g.shadowColor = L.wire; g.shadowBlur = 6; }
+          g.stroke();
+          g.shadowBlur = 0;
+        }
+      }
+    }
+  }
+}
+
+/** a tunnel seen from inside: rings of jittered polygons, far end glowing */
+function tunnel(g, L) {
+  const sides = 14, rings = 22, f = 520, cx = W / 2, cy = H * 0.46;
+  const lo = hex(L.ground[0]), hi = hex(L.ground[1]), fog = hex(L.fog);
+  const end = g.createRadialGradient(cx, cy, 0, cx, cy, H * 0.55);
+  end.addColorStop(0, L.endGlow);
+  end.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = end;
+  g.fillRect(0, 0, W, H);
+  const pt = [];
+  for (let j = 0; j <= rings; j++) {
+    const z = 1.4 * Math.pow(1.2, j);
+    const ring = [];
+    for (let i = 0; i <= sides; i++) {
+      const a = (i / sides) * Math.PI * 2;
+      const r = 6 * (1 - 0.35 * fbm(i * 0.7, j * 0.5, L.seed));
+      const ox = Math.sin(j * 0.18) * 2;
+      ring.push({ sx: cx + ((Math.cos(a) * r + ox) / z) * f, sy: cy + ((Math.sin(a) * r * 0.85) / z) * f, z, h: r / 6 });
+    }
+    pt.push(ring);
+  }
+  for (let j = rings - 1; j >= 0; j--) {
+    for (let i = 0; i < sides; i++) {
+      const a = pt[j][i], b = pt[j][i + 1], c = pt[j + 1][i], d = pt[j + 1][i + 1];
+      for (const tri of [[a, b, c], [b, d, c]]) {
+        const fogK = Math.min(1, Math.pow(tri[0].z / 40, 1.2));
+        const shade = 0.75 + 0.25 * hash(i, j, L.seed + 9);
+        const col = mix(mix(lo, hi, tri[0].h).map((v) => v * shade), fog, fogK);
+        g.beginPath();
+        g.moveTo(tri[0].sx, tri[0].sy); g.lineTo(tri[1].sx, tri[1].sy); g.lineTo(tri[2].sx, tri[2].sy);
+        g.closePath();
+        g.fillStyle = css(mix(hex(L.fillDark), fog, fogK * 0.8));
+        g.fill();
+        g.strokeStyle = css(mix(hex(L.wire), fog, fogK * 0.7), 0.95);
+        g.lineWidth = 1;
+        g.shadowColor = L.wire; g.shadowBlur = fogK < 0.7 ? 6 : 0;
+        g.stroke();
+        g.shadowBlur = 0;
+      }
+    }
+  }
+}
+
+function haze(g, L) {
+  if (!L.haze) return;
+  const grd = g.createLinearGradient(0, H * L.horizon - 30, 0, H);
+  grd.addColorStop(0, 'rgba(0,0,0,0)');
+  grd.addColorStop(1, L.haze);
+  g.fillStyle = grd;
+  g.fillRect(0, 0, W, H);
+}
+
+/** the player's dart from behind, with its light trail */
+function glider(g) {
+  const x = W / 2, y = H * 0.78;
+  const trail = g.createLinearGradient(0, y, 0, H);
+  trail.addColorStop(0, 'rgba(200,245,255,0.85)');
+  trail.addColorStop(1, 'rgba(200,245,255,0)');
+  g.fillStyle = trail;
+  g.beginPath();
+  g.moveTo(x - 14, y + 6); g.lineTo(x + 14, y + 6); g.lineTo(x + 26, H); g.lineTo(x - 26, H);
+  g.closePath();
+  g.fill();
+  g.save();
+  g.shadowColor = '#7fe6ff'; g.shadowBlur = 14;
+  g.beginPath();
+  g.moveTo(x - 62, y + 10); g.lineTo(x, y - 18); g.lineTo(x + 62, y + 10); g.closePath();
+  g.fillStyle = '#1d2230';
+  g.fill();
+  g.strokeStyle = '#9ff0ff';
+  g.lineWidth = 2;
+  g.stroke();
+  g.beginPath();
+  g.moveTo(x - 14, y + 6); g.lineTo(x, y - 6); g.lineTo(x + 14, y + 6); g.closePath();
+  g.fillStyle = '#e8fbff';
+  g.fill();
+  g.restore();
+}
+
+function vignette(g, amt) {
+  const v = g.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95);
+  v.addColorStop(0, 'rgba(0,0,0,0)');
+  v.addColorStop(1, `rgba(0,0,0,${amt})`);
+  g.fillStyle = v;
+  g.fillRect(0, 0, W, H);
+}
+
+const LEVELS = [
+  {
+    n: 11, name: 'Diamond Sky', tag: 'light · fill · floating diamonds',
+    info: 'Pale lavender morning. Big glassy diamonds drift and turn slowly overhead; soft low-poly hills, wide open flying.',
+    seed: 11, dark: false, horizon: 0.56, sky: ['#b9b3e6', '#efe8ff', '#ffffff'], sun: { c: 'rgba(255,255,255,0.9)', r: 0.5 },
+    ground: ['#8f86c4', '#e9e4ff'], fog: '#efeaff', fogAmt: 1, style: 'fill', camH: 2.6, amp: 9, freq: 0.09, sharp: 1.3, valley: 4,
+    diamond: { count: 16, scale: 1.25, shades: ['#ffffffee', '#d9d2ffdd', '#a99ee8dd', '#c6bdf5dd'], edge: '#ffffff', glow: 'rgba(255,255,255,0.6)' },
+    vignette: 0.15,
+  },
+  {
+    n: 12, name: 'Obsidian Grid', tag: 'dark · wireframe + fill',
+    info: 'Black faceted mountains, every edge traced in glowing cyan. A thin teal horizon line, no sun: you read the land by its edges.',
+    seed: 12, dark: true, horizon: 0.5, sky: ['#000000', '#021216', '#04262c'], sun: { c: 'rgba(40,220,255,0.35)', r: 0.35 },
+    ground: ['#000', '#000'], fillDark: '#05070a', wire: '#3fe8ff', wireGlow: true, fog: '#03282e', fogAmt: 1, style: 'wirefill',
+    camH: 2.4, amp: 11, freq: 0.1, sharp: 1.6, valley: 3.5,
+    diamond: { count: 0 }, vignette: 0.5,
+  },
+  {
+    n: 13, name: 'Glass Dunes', tag: 'light · wireframe + fill · diamonds',
+    info: 'White-blue dunes like frosted glass: pale fill with bright white edges. Translucent diamonds hang low over the dunes.',
+    seed: 13, dark: false, horizon: 0.5, sky: ['#7fb6d9', '#dff1fb', '#ffffff'], sun: { c: 'rgba(255,255,255,0.85)', r: 0.45 },
+    ground: ['#000', '#000'], fillDark: '#cfe6f2', wire: '#ffffff', wireGlow: false, fog: '#eef8fd', fogAmt: 1, style: 'wirefill',
+    camH: 2.2, amp: 6, freq: 0.07, sharp: 1.1, valley: 3,
+    diamond: { count: 10, scale: 1, shades: ['#ffffffcc', '#d8f0ffbb', '#9fd0eebb', '#bfe2f7bb'], edge: '#ffffff', glow: 'rgba(200,240,255,0.7)' },
+    vignette: 0.12,
+  },
+  {
+    n: 14, name: 'Night Diamonds', tag: 'dark · fill · glowing diamonds',
+    info: 'Deep navy night over a violet canyon. Glowing magenta diamonds float in the sky like lanterns, lighting the ridges.',
+    seed: 14, dark: true, horizon: 0.52, sky: ['#02030d', '#120a35', '#3a1550'], sun: { c: 'rgba(255,80,200,0.35)', r: 0.4 },
+    ground: ['#140a2a', '#6a3a8f'], fog: '#2a1240', fogAmt: 1, style: 'fill', camH: 2.6, amp: 13, freq: 0.1, sharp: 1.7, valley: 3.2, lightX: 0.8,
+    diamond: { count: 18, scale: 1, shades: ['#ffd0f4', '#ff6ad5', '#b8279a', '#ff9ae6'], edge: '#ffe6fa', glow: 'rgba(255,90,210,0.95)' },
+    vignette: 0.45,
+  },
+  {
+    n: 15, name: 'Prism Tunnel', tag: 'dark tunnel · wireframe + fill · diamonds',
+    info: 'A black crystalline tunnel with glowing violet-white edges; prism diamonds tumble toward you out of the light at the end.',
+    seed: 15, dark: true, tunnel: true, horizon: 0.46, sky: ['#000', '#000', '#000'], endGlow: 'rgba(255,240,255,0.95)',
+    ground: ['#000', '#000'], fillDark: '#06040c', wire: '#c9a6ff', fog: '#b9a2e8',
+    diamond: { count: 12, scale: 1, shades: ['#ffffff', '#ffd6f6', '#9fe8ff', '#d9c6ff'], edge: '#ffffff', glow: 'rgba(220,200,255,0.9)' },
+    vignette: 0.5,
+  },
+];
+
+const layer = () => {
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  return [c, c.getContext('2d')];
+};
+
+// static layers are drawn once; only the diamonds are redrawn every frame
+// sky diamonds sit behind the terrain, tunnel diamonds in front of the walls
+const scenes = [];
+const grid = document.getElementById('grid');
+for (const L of LEVELS) {
+  const fig = document.createElement('figure');
+  const [c, g] = layer();
+  const [back, bg] = layer();
+  const [front, fg] = layer();
+  sky(bg, L);
+  if (L.tunnel) tunnel(bg, L);
+  else {
+    terrain(fg, L);
+    haze(fg, L);
+  }
+  glider(fg);
+  vignette(fg, L.vignette);
+  scenes.push({ L, g, back, front, list: L.diamond.count ? makeDiamonds(L) : [] });
+  fig.append(c);
+  const cap = document.createElement('figcaption');
+  cap.innerHTML = `<b>${L.n} · ${L.name.toUpperCase()}</b> <span>${L.tag}</span><span>${L.info}</span>`;
+  fig.append(cap);
+  grid.append(fig);
+}
+
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function frame(ms) {
+  const t = ms / 1000;
+  for (const s of scenes) {
+    s.g.drawImage(s.back, 0, 0);
+    drawDiamonds(s.g, s.list, t, s.L);
+    s.g.drawImage(s.front, 0, 0);
+  }
+  if (!still) requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

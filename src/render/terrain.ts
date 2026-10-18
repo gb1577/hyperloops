@@ -13,6 +13,8 @@ export function tubeCenter(spec: TerrainLayerSpec, z: number, out = { x: 0, y: 0
   return out;
 }
 const VIEW_DIST = 420;
+/** faces folding more than this (degrees) make a glowing ridge line */
+const RIDGE_ANGLE = 28;
 
 /**
  * Streaming low-poly terrain. The world is cut into fixed chunks along -Z; chunks behind the camera
@@ -26,8 +28,9 @@ export class TerrainLayer {
   private readonly rows: number;
   private readonly cellZ: number;
   private readonly chunkLen: number;
-  private readonly slots: { mesh: THREE.Mesh; k: number }[] = [];
+  private readonly slots: { mesh: THREE.Mesh; ridge: THREE.LineSegments | null; k: number }[] = [];
   private readonly material: THREE.Material;
+  private readonly ridgeMat: THREE.LineBasicNodeMaterial | null = null;
   private readonly cLow: THREE.Color;
   private readonly cHigh: THREE.Color;
   private readonly seed: number;
@@ -57,6 +60,8 @@ export class TerrainLayer {
       this.material = new THREE.MeshLambertNodeMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
     }
 
+    if (spec.ridgeGlow) this.ridgeMat = new THREE.LineBasicNodeMaterial({ vertexColors: true });
+
     const n = Math.ceil(VIEW_DIST / this.chunkLen) + 2;
     for (let s = 0; s < n; s++) {
       const g = new THREE.BufferGeometry();
@@ -67,7 +72,13 @@ export class TerrainLayer {
       const mesh = new THREE.Mesh(g, this.material);
       mesh.frustumCulled = false;
       this.group.add(mesh);
-      this.slots.push({ mesh, k: -9999 });
+      let ridge: THREE.LineSegments | null = null;
+      if (this.ridgeMat) {
+        ridge = new THREE.LineSegments(new THREE.BufferGeometry(), this.ridgeMat);
+        ridge.frustumCulled = false;
+        this.group.add(ridge);
+      }
+      this.slots.push({ mesh, ridge, k: -9999 });
     }
   }
 
@@ -79,14 +90,19 @@ export class TerrainLayer {
       const slot = this.slots[((k % n) + n) % n];
       if (slot.k !== k) {
         this.build(slot.mesh, k);
+        if (slot.ridge) this.buildRidges(slot.mesh, slot.ridge);
         slot.k = k;
       }
     }
   }
 
   dispose() {
-    for (const s of this.slots) s.mesh.geometry.dispose();
+    for (const s of this.slots) {
+      s.mesh.geometry.dispose();
+      s.ridge?.geometry.dispose();
+    }
     this.material.dispose();
+    this.ridgeMat?.dispose();
   }
 
   get kind() {
@@ -169,6 +185,39 @@ export class TerrainLayer {
       d *= lerp(minF, 1, smoothstep(c0, c1, Math.abs(across)));
     }
     return d;
+  }
+
+  /**
+   * ridge glow: the sharp creases of a chunk (where neighbouring faces fold more than RIDGE_ANGLE),
+   * kept only on the upper part of the mountains and brightest at the top, in HDR so bloom catches them
+   */
+  private buildRidges(mesh: THREE.Mesh, ridge: THREE.LineSegments) {
+    const s = this.spec;
+    const glow = s.ridgeGlow!;
+    const all = glow.mode === 'all';
+    const edges = new THREE.EdgesGeometry(mesh.geometry, all ? 1 : RIDGE_ANGLE);
+    const src = edges.attributes.position.array as Float32Array;
+    edges.dispose();
+    const top = s.amp + s.spikeHeight * 0.6;
+    const from = s.base + top * 0.15;
+    const to = s.base + top * 0.8;
+    const color = new THREE.Color(glow.color);
+    const pos: number[] = [];
+    const col: number[] = [];
+    for (let i = 0; i < src.length; i += 6) {
+      const ya = src[i + 1];
+      const yb = src[i + 4];
+      if (!all && Math.min(ya, yb) < from) continue;
+      for (const y of [ya, yb]) {
+        const h = smoothstep(from, to, y);
+        const k = glow.intensity * (all ? 0.45 + 0.55 * h : h);
+        col.push(color.r * k, color.g * k, color.b * k);
+      }
+      pos.push(src[i], src[i + 1], src[i + 2], src[i + 3], src[i + 4], src[i + 5]);
+    }
+    const g = ridge.geometry;
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   }
 
   private build(mesh: THREE.Mesh, k: number) {

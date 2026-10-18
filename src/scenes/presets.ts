@@ -40,10 +40,12 @@ export const PRESETS: ScenePreset[] = [
       {
         kind: 'floor', colorLow: '#3d2a2a', colorHigh: '#f2d4ca', size: 140, base: 0, cell: 6, amp: 12, freq: [0.05, 0.05],
         sharp: 1.3, ridged: true, spikeChance: 0.3, spikeHeight: 16, jitter: 0.45, clearance: [3, 16, 0.3], shadeJitter: 0.14,
+        ridgeGlow: { color: '#ffc878', intensity: 3.5 },
       },
     ],
     camera: { ...baseCam, height: 9, pitch: 0.06, sway: 1.2 },
     post: { ...basePost, vignetteColor: '#2a1916', vignette: 0.85 },
+    atmosphere: { mist: { color: '#ffe6c4', opacity: 0.4, height: [0, 5] } },
     play: { halfWidth: 9, down: 6, up: 5 },
     hazards: { patterns: ['scatter', 'slalom', 'aimed', 'wall'], perBeat: 0.9, radius: [1.4, 2.2], place: 'floor', spread: 0.9, color: '#ffd9c2' },
     transition: 'cut',
@@ -156,10 +158,12 @@ export const PRESETS: ScenePreset[] = [
       {
         kind: 'floor', colorLow: '#1a1250', colorHigh: '#8a78e6', size: 140, base: 0, cell: 5, amp: 16, freq: [0.02, 0.03],
         sharp: 1.3, spikeChance: 0.15, spikeHeight: 6, jitter: 0.45, clearance: [2, 20, 0.35], shadeJitter: 0.15,
+        ridgeGlow: { color: '#c8a8ff', intensity: 4 },
       },
     ],
     camera: { ...baseCam, height: 13, pitch: -0.06, roll: 0.1, rollSwing: 0.22, rollPeriodBars: 2, sway: 4 },
     post: { ...basePost, vignetteColor: '#2c1e70', vignette: 0.45 },
+    atmosphere: { mist: { color: '#e6dcff', opacity: 0.4, height: [0, 7] } },
     play: { halfWidth: 10, down: 9, up: 5 },
     hazards: { patterns: ['slalom', 'wall', 'scatter', 'aimed'], perBeat: 1, radius: [1.5, 2.3], place: 'floor', spread: 0.9, color: '#c9bcff' },
     transition: 'cut',
@@ -236,8 +240,8 @@ export const PRESETS: ScenePreset[] = [
   // 10 · Wire Night — black/teal sky, glowing wireframe terrain over white haze
   {
     name: 'Wire Night',
-    bars: 16,
-    music: { track: 't3', from: 6 },
+    bars: 32,
+    music: { track: 't3', from: 4 },
     sky: { top: '#000208', horizon: '#0c3c3a', ground: '#a9bfb9', sun: '#3a8c84', sunDir: [0, 0.05, -1], sunIntensity: 0.15, halo: 0.3 },
     fog: { color: '#0c3634', density: 0.006 },
     light: { color: '#ffffff', intensity: 1, dir: [0, 1, 0], hemiSky: '#ffffff', hemiGround: '#ffffff', hemi: 1 },
@@ -254,6 +258,148 @@ export const PRESETS: ScenePreset[] = [
     },
     play: { halfWidth: 10, down: 4, up: 4 },
     hazards: { patterns: ['scatter', 'wall', 'slalom', 'aimed'], perBeat: 1, radius: [1.2, 1.8], place: 'floor', spread: 0.9, color: '#a8fff0', style: 'wire' },
+    transition: 'cut',
+    fadeOut: 1,
+  },
+
+  // 11 · Neon Dusk — test level from the painted key art: violet sky into a golden sun, dark purple peaks
+  // with pink-lit faces and glowing ridges, pink mist in the valleys
+  {
+    name: 'Neon Dusk',
+    bars: 32,
+    music: { track: 't2', from: 0 },
+    sky: {
+      top: '#3a1474', horizon: '#f08fae', ground: '#f6c3a0', sun: '#fff1c8', sunDir: [0, 0.07, -1], sunIntensity: 2.6,
+      halo: 0.6, haloPower: 9, ring: 0.3, gradient: 0.3,
+    },
+    fog: { color: '#d99ac4', density: 0.0055 },
+    light: { color: '#ffd6e2', intensity: 3, dir: [-0.6, 0.55, -0.55], hemiSky: '#b79be8', hemiGround: '#140826', hemi: 0.7 },
+    layers: [
+      {
+        kind: 'floor', colorLow: '#1c0d36', colorHigh: '#e6b6dc', size: 140, base: 0, cell: 6, amp: 13, freq: [0.05, 0.05],
+        sharp: 1.4, ridged: true, spikeChance: 0.28, spikeHeight: 16, jitter: 0.45, clearance: [3, 16, 0.25], shadeJitter: 0.12,
+        ridgeGlow: { color: '#ff86d0', intensity: 7 },
+      },
+    ],
+    camera: { ...baseCam, height: 9, pitch: 0.05, sway: 1.2 },
+    lines: { lasers: { count: 6, color: '#ff7ad8', opacity: 0.55, thickness: 0.06, mode: 'radial' } },
+    post: {
+      ...basePost, bloom: 0.8, threshold: 0.95, vignetteColor: '#160629', vignette: 0.85,
+    },
+    atmosphere: {
+      mist: { color: '#ffd2ec', opacity: 0.45, height: [0, 5] },
+    },
+    play: { halfWidth: 9, down: 6, up: 5 },
+    hazards: { patterns: ['scatter', 'slalom', 'aimed', 'wall'], perBeat: 0.9, radius: [1.4, 2.2], place: 'floor', spread: 0.9, color: '#ffd0ee' },
+    transition: 'cut',
+  },
+
+  // 12 · Ember Night — near-black peaks traced in ember orange, a low blood-red sun, smoky red mist
+  {
+    name: 'Ember Night',
+    bars: 32,
+    music: { track: 'ref', from: 4 },
+    sky: {
+      top: '#07040c', horizon: '#7a1e12', ground: '#c24a20', sun: '#ff7a3a', sunDir: [0.15, 0.05, -1], sunIntensity: 2,
+      halo: 0.45, haloPower: 14, ring: 0.35, gradient: 0.22,
+    },
+    fog: { color: '#4a160e', density: 0.006 },
+    light: { color: '#ff9a6a', intensity: 2.4, dir: [0.5, 0.4, -0.7], hemiSky: '#6a2a3a', hemiGround: '#050208', hemi: 0.5 },
+    layers: [
+      {
+        kind: 'floor', colorLow: '#0a0508', colorHigh: '#5a2a26', size: 140, base: 0, cell: 6, amp: 14, freq: [0.05, 0.05],
+        sharp: 1.5, ridged: true, spikeChance: 0.3, spikeHeight: 17, jitter: 0.45, clearance: [3, 16, 0.25], shadeJitter: 0.12,
+        ridgeGlow: { color: '#ff6a2a', intensity: 6 },
+      },
+    ],
+    camera: { ...baseCam, height: 9, pitch: 0.05, sway: 1.2 },
+    lines: { lasers: { count: 5, color: '#ff7a3a', opacity: 0.5, thickness: 0.06, mode: 'radial' } },
+    post: { ...basePost, bloom: 0.85, threshold: 0.9, vignetteColor: '#000000', vignette: 0.9 },
+    atmosphere: { mist: { color: '#ff9a7a', opacity: 0.32, height: [0, 5] } },
+    play: { halfWidth: 9, down: 6, up: 5 },
+    hazards: { patterns: ['wall', 'scatter', 'aimed', 'slalom'], perBeat: 1, radius: [1.4, 2.2], place: 'floor', spread: 0.9, color: '#ffb48a' },
+    transition: 'cut',
+  },
+
+  // 13 · Aurora Ridge — dark teal-blue peaks with cyan ridges, a cold green glow on the horizon, teal mist
+  {
+    name: 'Aurora Ridge',
+    bars: 32,
+    music: { track: 't2', from: 4 },
+    sky: {
+      top: '#02060f', horizon: '#0f4a46', ground: '#2a8a78', sun: '#b8ffe0', sunDir: [-0.2, 0.12, -1], sunIntensity: 1.2,
+      halo: 0.6, haloPower: 9, ring: 0.15, gradient: 0.3,
+    },
+    fog: { color: '#071c22', density: 0.0055 },
+    light: { color: '#a8fff0', intensity: 2.2, dir: [-0.5, 0.5, -0.7], hemiSky: '#2a6a8a', hemiGround: '#02040a', hemi: 0.55 },
+    layers: [
+      {
+        kind: 'floor', colorLow: '#030a14', colorHigh: '#2a5a6e', size: 140, base: 0, cell: 6, amp: 15, freq: [0.04, 0.05],
+        sharp: 1.6, ridged: true, spikeChance: 0.25, spikeHeight: 15, jitter: 0.45, clearance: [3, 18, 0.25], shadeJitter: 0.12,
+        ridgeGlow: { color: '#3ff0ff', intensity: 5 },
+      },
+    ],
+    camera: { ...baseCam, height: 10, pitch: 0.06, sway: 1.4 },
+    lines: { scan: { count: 4, color: '#8affd8', opacity: 0.35 } },
+    post: { ...basePost, bloom: 0.8, threshold: 0.9, vignetteColor: '#000208', vignette: 0.85 },
+    atmosphere: { mist: { color: '#8affe0', opacity: 0.18, height: [0, 6] } },
+    play: { halfWidth: 9, down: 6, up: 5 },
+    hazards: { patterns: ['slalom', 'scatter', 'wall', 'aimed'], perBeat: 1.1, radius: [1.3, 2.0], place: 'floor', spread: 0.9, color: '#a8fff0' },
+    transition: 'cut',
+  },
+
+  // 14 · Black Gold — black peaks with gold ridges, a gold sun, smoky amber mist; the run fades to black
+  {
+    name: 'Black Gold',
+    bars: 32,
+    music: { track: 't3', from: 4 },
+    sky: {
+      top: '#050403', horizon: '#5a3c10', ground: '#a8782a', sun: '#ffd27a', sunDir: [0, 0.1, -1], sunIntensity: 2.3,
+      halo: 0.5, haloPower: 13, ring: 0.4, gradient: 0.24,
+    },
+    fog: { color: '#2a1e0c', density: 0.006 },
+    light: { color: '#ffd8a0', intensity: 2.6, dir: [-0.4, 0.5, -0.8], hemiSky: '#5a4420', hemiGround: '#030202', hemi: 0.45 },
+    layers: [
+      {
+        kind: 'floor', colorLow: '#050404', colorHigh: '#3a3024', size: 140, base: 0, cell: 6, amp: 14, freq: [0.05, 0.05],
+        sharp: 1.4, ridged: true, spikeChance: 0.3, spikeHeight: 16, jitter: 0.45, clearance: [3, 16, 0.25], shadeJitter: 0.1,
+        ridgeGlow: { color: '#ffc04a', intensity: 6 },
+      },
+    ],
+    camera: { ...baseCam, height: 9, pitch: 0.05, sway: 1.2 },
+    lines: { lasers: { count: 5, color: '#ffc85a', opacity: 0.45, thickness: 0.06, mode: 'radial' } },
+    post: { ...basePost, bloom: 0.85, threshold: 0.9, vignetteColor: '#000000', vignette: 0.9 },
+    atmosphere: { mist: { color: '#ffd89a', opacity: 0.3, height: [0, 5] } },
+    play: { halfWidth: 9, down: 6, up: 5 },
+    hazards: { patterns: ['scatter', 'wall', 'slalom', 'aimed'], perBeat: 1.15, radius: [1.3, 2.1], place: 'floor', spread: 0.9, color: '#ffe0a0' },
+    transition: 'cut',
+  },
+
+  // 15 · Obsidian Grid — the finale: black solid mountains with every edge traced in glowing cyan, no sun,
+  // only a thin teal horizon; you read the land by its edges. The run fades to black at the end.
+  {
+    name: 'Obsidian Grid',
+    bars: 32,
+    music: { track: 'ref', from: 6 },
+    sky: {
+      top: '#000000', horizon: '#06343a', ground: '#0a4a50', sun: '#3fe8ff', sunDir: [0, 0.03, -1], sunIntensity: 0.9,
+      halo: 0.5, haloPower: 6, ring: 0.1, gradient: 0.22,
+    },
+    fog: { color: '#03181c', density: 0.0065 },
+    light: { color: '#6adfff', intensity: 0.8, dir: [-0.4, 0.6, -0.6], hemiSky: '#0a3a44', hemiGround: '#000000', hemi: 0.3 },
+    layers: [
+      {
+        kind: 'floor', colorLow: '#010203', colorHigh: '#06121a', size: 140, base: 0, cell: 6, amp: 14, freq: [0.05, 0.05],
+        sharp: 1.5, ridged: true, spikeChance: 0.28, spikeHeight: 15, jitter: 0.45, clearance: [3, 16, 0.25], shadeJitter: 0.08,
+        ridgeGlow: { color: '#3fe8ff', intensity: 3.2, mode: 'all' },
+      },
+    ],
+    camera: { ...baseCam, height: 9, pitch: 0.05, sway: 1.2 },
+    lines: { lasers: { count: 4, color: '#3fe8ff', opacity: 0.4, thickness: 0.05, mode: 'radial' } },
+    post: { ...basePost, bloom: 0.9, threshold: 0.85, vignetteColor: '#000000', vignette: 0.9 },
+    atmosphere: { mist: { color: '#3fd8e8', opacity: 0.18, height: [0, 4] } },
+    play: { halfWidth: 9, down: 6, up: 5 },
+    hazards: { patterns: ['wall', 'scatter', 'aimed', 'slalom'], perBeat: 1.2, radius: [1.2, 1.9], place: 'floor', spread: 0.9, color: '#a8fff0', style: 'wire' },
     transition: 'cut',
     fadeOut: 1,
   },
