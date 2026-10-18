@@ -6,6 +6,10 @@ A rhythm graze-runner for the browser: crystal spikes erupt on the beat of a 160
 through them as close as you dare, grab gold shards and dive through a hyperloop into the next of 15 worlds.
 Built from my 2016 After Effects music video (the first ten levels recreate its scenes).
 
+### ▶ [Play in your browser](https://gb1577.github.io/hyperloops/)
+
+Every push to `main` rebuilds and redeploys it to GitHub Pages ([.github/workflows/pages.yml](.github/workflows/pages.yml)).
+
 Design and plan: [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) · Storyboard: [docs/storyboard/index.html](docs/storyboard/index.html) · itch.io page text: [docs/itch-page.md](docs/itch-page.md)
 
 ## Run
