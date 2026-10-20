@@ -1,3 +1,5 @@
+![Hyperloops](docs/cover.jpg)
+
 # HYPERLOOPS
 
 **Fly a shard of light through low-poly worlds, on the beat.**
@@ -11,6 +13,14 @@ Built from my 2016 After Effects music video (the first ten levels recreate its 
 Every push to `main` rebuilds and redeploys it to GitHub Pages ([.github/workflows/pages.yml](.github/workflows/pages.yml)).
 
 Design and plan: [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) · Storyboard: [docs/storyboard/index.html](docs/storyboard/index.html) · itch.io page text: [docs/itch-page.md](docs/itch-page.md)
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Screenshot 1](docs/screenshot-1.jpg) | ![Screenshot 2](docs/screenshot-2.jpg) |
+| ![Screenshot 3](docs/screenshot-3.jpg) | ![Screenshot 4](docs/screenshot-4.jpg) |
+| ![Screenshot 5](docs/screenshot-5.jpg) | ![Screenshot 6](docs/screenshot-6.jpg) |
 
 ## Run
 
