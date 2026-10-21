@@ -85,7 +85,6 @@ async function boot() {
     else if (e.code === 'BracketLeft') seekScene(world.sceneIndex - 1);
     // 1..9, 0 = levels 1..10; with Shift: levels 11..20
     else if (/^Digit\d$/.test(e.code)) seekScene(((Number(e.code.slice(5)) + 9) % 10) + (e.shiftKey ? 10 : 0));
-    else if (e.code === 'KeyV') hud.cycleRef();
     else if (e.code === 'KeyH') hud.toggle();
     else if (e.code === 'KeyJ') game.setLaneMode(!game.laneMode, clock.time);
     else if (e.code === 'KeyF') game.setFiring(!game.firing);
@@ -145,7 +144,6 @@ async function boot() {
     const focus = frozen === undefined ? game.update(info, dt) : undefined;
     world.update(info, clock.bass, focus);
     world.post.render();
-    hud.syncRef(info.songTime, clock.playing && frozen === undefined);
     const idx = world.sceneIndex;
     hud.update(info, PRESETS[idx].name, idx + 1, PRESETS.length, dt);
   });

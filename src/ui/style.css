@@ -2,14 +2,6 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
 body { font: 13px/1.45 system-ui, 'Segoe UI', Roboto, sans-serif; color: #fff; }
 canvas { display: block; position: fixed; inset: 0; width: 100vw !important; height: 100vh !important; }
 
-#ref {
-  position: fixed; pointer-events: none; display: none; background: #000; object-fit: cover;
-}
-#ref.pip { display: block; right: 16px; bottom: 16px; width: 28vw; aspect-ratio: 16 / 9; border: 1px solid #fff6; box-shadow: 0 8px 30px #0008; }
-#ref.wipe { display: block; inset: 0; width: 100vw; height: 100vh; clip-path: inset(0 0 0 50%); }
-#wipe-line { position: fixed; top: 0; bottom: 0; left: 50%; width: 1px; background: #fff8; display: none; pointer-events: none; }
-#ref.wipe ~ #wipe-line { display: block; }
-
 #hud {
   position: fixed; left: 16px; top: 16px; padding: 10px 14px; border-radius: 8px;
   background: #0009; backdrop-filter: blur(6px); letter-spacing: .04em; min-width: 230px;

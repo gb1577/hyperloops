@@ -71,7 +71,6 @@ The game remembers your last choice, and Enter starts it.
 | I | invincible |
 | J | lane-snapping control prototype |
 | F | lock-on firing experiment |
-| V | reference video: off → picture-in-picture → 50/50 wipe |
 | H | debug HUD |
 
 URL flags: `?mute` starts silent. `?t=SECONDS` freezes time for look-dev stills.
