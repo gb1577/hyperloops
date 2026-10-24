@@ -25,7 +25,12 @@ Design and plan: [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) · Storyboard: [docs
 ## Run
 
 **Play without a server:** run `npm run build` once, then double-click `final/index.html`.
-It's a single self-contained file (code, styles and all music inlined, ~12 MB) that works straight from disk.
+It's a single self-contained file (code, styles and all music inlined, ~21 MB) that works straight from disk.
+The music is in it twice: Opus, plus an AAC copy for older Safari (e.g. 2017 iPads) that can't play Opus.
+
+**Website:** run `npm run build:web` and upload the whole `web/` folder. The code and music are separate files there,
+so each browser downloads only the music format it can play (~7 MB) and the page appears before the music has loaded.
+GitHub Pages deploys this build automatically on every push to `main`.
 
 **Release:** zip `final/index.html` as `index.html` at the zip root and upload it to itch.io as an HTML game
 (settings in [docs/itch-page.md](docs/itch-page.md)). Teaser videos are rendered into `video/`; both `video/` and `release/` are kept out of git.

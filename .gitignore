@@ -1,5 +1,6 @@
 node_modules
 final
+web
 
 # large source video, kept on disk only
 ref/
