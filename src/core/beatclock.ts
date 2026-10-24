@@ -57,7 +57,9 @@ export class BeatClock {
   /** Must be called from a user gesture. */
   async start() {
     if (!this.ctx) {
-      this.ctx = new AudioContext();
+      // older Safari only has the prefixed constructor
+      const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      this.ctx = new Ctor();
       this.filter = this.ctx.createBiquadFilter();
       this.filter.type = 'lowpass';
       this.filter.frequency.value = 20000;
@@ -72,17 +74,30 @@ export class BeatClock {
       this.master.connect(this.ctx.destination);
       this.freq = new Uint8Array(this.analyser.frequencyBinCount);
       const ctx = this.ctx;
+      // Opus where the browser can play it, AAC otherwise (older Safari); if one fails, try the other.
+      // A track that can't load just stays silent — the clock (and the game) must run regardless.
+      const opusFirst = new Audio().canPlayType('audio/ogg; codecs="opus"') !== '';
+      const decode = (url: string) =>
+        fetch(url)
+          .then((r) => r.arrayBuffer())
+          .then((b) => ctx.decodeAudioData(b));
       this.loading = Promise.all(
-        (Object.keys(TRACKS) as TrackId[]).map((id) =>
-          fetch(TRACKS[id].url)
-            .then((r) => r.arrayBuffer())
-            .then((b) => ctx.decodeAudioData(b))
-            .then((buf) => void (this.buffers[id] = buf)),
-        ),
+        (Object.keys(TRACKS) as TrackId[]).map((id) => {
+          const t = TRACKS[id];
+          const [first, second] = opusFirst ? [t.url, t.aac] : [t.aac, t.url];
+          return decode(first)
+            .catch(() => decode(second))
+            .then((buf) => void (this.buffers[id] = buf))
+            .catch((e) => console.warn(`music: could not load track ${id}`, e));
+        }),
       ).then(() => undefined);
     }
-    await this.ctx.resume();
-    await this.loading;
+    try {
+      await this.ctx.resume();
+      await this.loading;
+    } catch (e) {
+      console.warn('music: audio could not start, playing silently', e);
+    }
     this.play();
   }
 
@@ -177,7 +192,7 @@ export class BeatClock {
   }
 
   private play() {
-    if (!this.ctx || !this.buffers.ref) return;
+    if (!this.ctx) return;
     this.paused = false;
     this.origin = this.ctx.currentTime - this.pausedAt;
     this.scheduledUntil = this.pausedAt;
@@ -196,7 +211,8 @@ export class BeatClock {
       const to = from + (SECTION_LEN - (place.sceneTime % SECTION_LEN));
       let when = this.origin + from;
       let offset = place.trackTime;
-      const buf = this.buffers[place.track] ?? this.buffers.ref!;
+      // a track that failed to load is skipped: silence, but the clock keeps time
+      const buf = this.buffers[place.track];
       let dur = to - from;
       if (when < ctx.currentTime) {
         const late = ctx.currentTime - when;
@@ -204,7 +220,7 @@ export class BeatClock {
         offset += late;
         dur -= late;
       }
-      if (dur > 0.01) {
+      if (dur > 0.01 && buf) {
         const src = ctx.createBufferSource();
         src.buffer = buf;
         src.connect(out);

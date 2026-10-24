@@ -16,12 +16,16 @@ canvas { display: block; position: fixed; inset: 0; width: 100vw !important; hei
 #hud.hidden { display: none; }
 
 #start {
-  position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+  /* centred with auto margins (below) rather than justify-content, so a short window scrolls instead of clipping */
+  overflow-y: auto; padding: 16px; box-sizing: border-box; -webkit-overflow-scrolling: touch;
   /* the flythrough shows at the edges; a soft dark pool behind the menu keeps it readable */
   background: radial-gradient(ellipse 46% 52% at 50% 50%, #000b 0%, #0008 45%, #0000 100%); text-align: center;
 }
+#start > :first-child { margin-top: auto; }
+#start > :last-child { margin-bottom: auto; }
 #start h1 { margin: 0 0 10px; line-height: 0; }
-#start h1 img { width: min(760px, 88vw); height: auto; filter: drop-shadow(0 0 18px #000c); }
+#start h1 img { width: auto; height: auto; max-width: min(760px, 88vw); max-height: 32vh; filter: drop-shadow(0 0 18px #000c); }
 /* a soft band of light travelling along the letters, masked to the logo's own shapes */
 #start h1.logo { position: relative; display: inline-block; }
 #start h1.logo::after {
@@ -43,6 +47,19 @@ canvas { display: block; position: fixed; inset: 0; width: 100vw !important; hei
 #start .go small { letter-spacing: .08em; font-size: 11px; color: #ccd; }
 #start .go:hover, #start .go.preferred { border-color: #fff; background: #ffffff22; box-shadow: 0 0 18px #ffffff44; }
 #start.hidden { display: none; }
+#start p { font-size: clamp(11px, 1.6vw + 0.4vh, 13px); max-width: 640px; }
+
+/* small or short windows (phones, embedded in a page): tighter spacing, smaller buttons */
+@media (max-width: 600px), (max-height: 520px) {
+  #start p { margin: 2px; }
+  #start p.renderer { display: none; }
+  #start .modes { margin-top: 12px; gap: 10px; }
+  #start .go { min-width: 120px; padding: 8px 18px; font-size: 13px; }
+}
+@media (max-height: 360px) {
+  #start h1 img { max-height: 24vh; }
+  #start .go small { display: none; }
+}
 
 /* ---------- in-game HUD ---------- */
 #ghud { position: fixed; inset: 0; pointer-events: none; font-variant-numeric: tabular-nums; text-shadow: 0 1px 8px #0006; }
